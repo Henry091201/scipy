@@ -408,7 +408,6 @@ Simple iteration solvers:
    diagbroyden
 
 """  # noqa: E501
-
 from ._optimize import *
 from ._minimize import *
 from ._root import *
@@ -422,6 +421,8 @@ from ._nonlin import *
 from ._slsqp_py import fmin_slsqp
 from ._nnls import nnls
 from ._basinhopping import basinhopping
+from ._mypython import mypython
+from ._mycython import mycython
 from ._linprog import linprog, linprog_verbose_callback
 from ._lsap import linear_sum_assignment
 from ._differentialevolution import differential_evolution
@@ -436,6 +437,7 @@ from ._dual_annealing import dual_annealing
 from ._qap import quadratic_assignment
 from ._direct_py import direct
 from ._milp import milp
+
 
 # Deprecated namespaces, to be removed in v2.0.0
 from . import (

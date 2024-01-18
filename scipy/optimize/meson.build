@@ -238,6 +238,17 @@ py3.extension_module('_bglu_dense',
   subdir: 'scipy/optimize'
 )
 
+_mycython_c = opt_gen.process('_mycython.pyx')
+
+py3.extension_module('_mycython',
+  _mycython_c,
+  c_args: cython_c_args,
+  dependencies: np_dep,
+  link_args: version_link_args,
+  install: true,
+  subdir: 'scipy/optimize'
+)
+
 subdir('_lsq')
 subdir('_trlib')
 subdir('_trustregion_constr')
@@ -254,6 +265,7 @@ py3.install_sources(
 py3.install_sources([
   '__init__.py',
   '_basinhopping.py',
+  '_mypython.py',
   '_chandrupatla.py',
   '_cobyla_py.py',
   '_constraints.py',
