@@ -232,6 +232,17 @@ py3.extension_module('_bglu_dense',
   subdir: 'scipy/optimize'
 )
 
+_particleswarm_c = opt_gen.process('_particleswarm.pyx')
+
+py3.extension_module('_particleswarm',
+  _particleswarm_c,
+  c_args: cython_c_args,
+  dependencies: np_dep,
+  link_args: version_link_args,
+  install: true,
+  subdir: 'scipy/optimize'
+)
+
 subdir('_lsq')
 subdir('_trlib')
 subdir('_trustregion_constr')
