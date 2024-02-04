@@ -1,4 +1,5 @@
 import numpy as np
+cimport numpy as np
 
 __all__ = ['particleswarm, rastrigin, ackley_function_2d']
 
@@ -29,6 +30,36 @@ cdef double ackley_function_2d(x, y):
 
     return value
 
+cdef class State:
+    cdef np.ndarray velocities 
+    cdef np.ndarray positions 
+    cdef np.ndarray bounds 
+
+    # Global best position and fitness
+    cdef np.ndarray gbest_position 
+    cdef double gbest_fitness 
+
+    # Parameters
+    cdef int swarmSize
+    cdef float w
+    cdef float c1
+    cdef float c2
+    cdef double objective_function
+
+    def __cinit__(self, object objective_function, int swarm_size, float w, float c1, float c2, int dimnesions, np.ndarray bounds = None):
+        #TODO: Look into using memoryviews for the arrays --> https://cython.readthedocs.io/en/latest/src/userguide/memoryviews.html
+        self.velocities = np.zeros((swarm_size, dimnesions))
+        self.positions = np.zeros((swarm_size, dimnesions))
+        self.bounds = bounds
+
+        self.gbest_position = np.zeros(dimnesions)
+        self.gbest_fitness = np.inf 
+
+        self.swarmSize = swarm_size
+        self.w = w
+        self.c1 = c1
+        self.c2 = c2
+        self.objective_function = objective_function
 
 class Particle:
     def __init__(self):
