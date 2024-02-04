@@ -45,6 +45,7 @@ cdef class State:
     cdef float w
     cdef float c1
     cdef float c2
+    cdef int dimensions
     cdef object objective_function
 
     def __cinit__(self, object objective_function, int swarm_size, int max_iterations, float w, float c1, float c2, int dimensions, np.ndarray bounds = None):
@@ -61,6 +62,7 @@ cdef class State:
         self.w = w
         self.c1 = c1
         self.c2 = c2
+        self.dimensions = dimensions
         self.objective_function = objective_function
     
     def print_class_variables(self):
@@ -73,7 +75,22 @@ cdef class State:
         print(f"w: {self.w}")
         print(f"c1: {self.c1}")
         print(f"c2: {self.c2}")
+        print(f"Dimensions: {self.dimensions}")
         print(f"Objective function: {self.objective_function}")
+
+    cdef void initialise_positions(self):
+        cdef int i
+        cdef int j
+
+        for i in range(self.swarmSize):
+            for j in range(self.dimensions):
+                # Choose a random position within the bounds for that dimension
+                random_position = np.random.uniform(self.bounds[j][0], self.bounds[j][1])
+                # Set the position
+                self.positions[i, j] = random_position
+
+
+        
 
 class Particle:
     def __init__(self):
@@ -206,4 +223,7 @@ class ParticleSwarm:
 def particleswarm(objective_function, swarm_size, max_iterations, w, c1, c2, dimensions, bounds=None):
     pso = State(objective_function, swarm_size, max_iterations, w, c1, c2, dimensions, bounds)
     print(f"Passed the initialisation step")
+    pso.print_class_variables()
+    print(f"Initialising positions")
+    pso.initialise_positions()
     pso.print_class_variables()
