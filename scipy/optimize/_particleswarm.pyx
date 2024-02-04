@@ -36,6 +36,7 @@ cdef class State:
     cdef np.ndarray bounds 
 
     # Global best position and fitness
+    cdef int max_iterations
     cdef np.ndarray gbest_position 
     cdef double gbest_fitness 
 
@@ -44,15 +45,16 @@ cdef class State:
     cdef float w
     cdef float c1
     cdef float c2
-    cdef double objective_function
+    cdef object objective_function
 
-    def __cinit__(self, object objective_function, int swarm_size, float w, float c1, float c2, int dimnesions, np.ndarray bounds = None):
+    def __cinit__(self, object objective_function, int swarm_size, int max_iterations, float w, float c1, float c2, int dimensions, np.ndarray bounds = None):
         #TODO: Look into using memoryviews for the arrays --> https://cython.readthedocs.io/en/latest/src/userguide/memoryviews.html
-        self.velocities = np.zeros((swarm_size, dimnesions))
-        self.positions = np.zeros((swarm_size, dimnesions))
+        self.velocities = np.zeros((swarm_size, dimensions))
+        self.positions = np.zeros((swarm_size, dimensions))
         self.bounds = bounds
 
-        self.gbest_position = np.zeros(dimnesions)
+        self.max_iterations = max_iterations
+        self.gbest_position = np.zeros(dimensions)
         self.gbest_fitness = np.inf 
 
         self.swarmSize = swarm_size
@@ -60,6 +62,18 @@ cdef class State:
         self.c1 = c1
         self.c2 = c2
         self.objective_function = objective_function
+    
+    def print_class_variables(self):
+        print(f"Velocities: {self.velocities}")
+        print(f"Positions: {self.positions}")
+        print(f"Bounds: {self.bounds}")
+        print(f"Global best position: {self.gbest_position}")
+        print(f"Global best fitness: {self.gbest_fitness}")
+        print(f"Swarm size: {self.swarmSize}")
+        print(f"w: {self.w}")
+        print(f"c1: {self.c1}")
+        print(f"c2: {self.c2}")
+        print(f"Objective function: {self.objective_function}")
 
 class Particle:
     def __init__(self):
@@ -189,7 +203,7 @@ class ParticleSwarm:
         return self.gbest_fitness, self.gbest_position
 
 
-def particleswarm(objective_function, swarm_size, max_iterations, w, c1, c2, bounds):
-    pso = ParticleSwarm(objective_function, swarm_size, max_iterations, w, c1, c2, bounds)
-    results = pso.run()
-    print(f"Best fitness and position: {results[0]}, {results[1]}")
+def particleswarm(objective_function, swarm_size, max_iterations, w, c1, c2, dimensions, bounds=None):
+    pso = State(objective_function, swarm_size, max_iterations, w, c1, c2, dimensions, bounds)
+    print(f"Passed the initialisation step")
+    pso.print_class_variables()
