@@ -116,6 +116,11 @@ cdef class State:
             self.pbest_fitnesses[particle_index] = fitness
         return fitness
 
+    cdef void calculate_all_fitnesses(self):
+        cdef int i
+        for i in range(self.swarmSize):
+            self.calculate_fitness_and_update(i)
+
     cdef void initialise_fitnesses(self):
         cdef int i
         for i in range(self.swarmSize):
@@ -141,6 +146,24 @@ cdef class State:
 
             self.velocities[particle_index][i] = self.w * velocity[i] + cognitive_component + social_component
 
+    cdef void update_all_velocities(self):
+        cdef int i
+        for i in range(self.swarmSize):
+            self.update_veocity(i)
+
+    cdef void update_position(self, int particle_index):
+        cdef int i
+        cdef np.ndarray position = self.positions[particle_index]
+        cdef np.ndarray velocity = self.velocities[particle_index]
+        for i in range(self.dimensions):
+            position[i] = position[i] + velocity[i]
+            # TODO: Deal with the bounds
+    
+    cdef void update_all_positions(self):
+        cdef int i
+        for i in range(self.swarmSize):
+            self.update_position(i)
+
     cdef void update_gbest(self):
         cdef int i 
         for i in range(self.swarmSize):
@@ -149,6 +172,36 @@ cdef class State:
                 self.gbest_fitness = self.pbest_fitnesses[i].copy()
                 self.gbest_position = self.positions[i].copy()
     
+    cdef void run(self):
+        # Initialise positions
+        self.initialise_positions()
+        # Initialise fitnesses
+        self.initialise_fitnesses()
+        # Update the global best
+        self.update_gbest()
+        # initialise velocities
+        self.initialise_velocities()
+        print(f"Initialised everything")
+        print(self.print_class_variables())
+
+
+        # Main loop 
+        cdef int i
+        for i in range(self.max_iterations):
+            # Update the positions
+            self.update_all_positions()
+            # Update the fitnesses
+            self.calculate_all_fitnesses()
+            # Update the global best
+            self.update_gbest()
+            # Update the velocities
+            self.update_all_velocities()
+
+        print(f"Finished running")
+        self.print_class_variables()
+
+
+
 
         
 
@@ -282,13 +335,5 @@ class ParticleSwarm:
 
 def particleswarm(objective_function, swarm_size, max_iterations, w, c1, c2, dimensions, bounds=None):
     pso = State(objective_function, swarm_size, max_iterations, w, c1, c2, dimensions, bounds)
-    print(f"Passed the initialisation step")
-    pso.print_class_variables()
-    print(f"Initialising positions")
-    pso.initialise_positions()
-    pso.initialise_fitnesses()
-    pso.update_gbest()
-    pso.print_class_variables()
-    print(f"Initialising velocities")
-    pso.initialise_velocities()
-    pso.print_class_variables()
+    pso.run()
+
