@@ -34,6 +34,7 @@ cdef class State:
     cdef np.ndarray velocities 
     cdef np.ndarray positions 
     cdef np.ndarray bounds 
+    cdef np.ndarray pbest_fitnesses
 
     # Global best position and fitness
     cdef int max_iterations
@@ -53,6 +54,7 @@ cdef class State:
         self.velocities = np.zeros((swarm_size, dimensions))
         self.positions = np.zeros((swarm_size, dimensions))
         self.bounds = bounds
+        self.pbest_fitnesses = np.zeros(swarm_size)
 
         self.max_iterations = max_iterations
         self.gbest_position = np.zeros(dimensions)
@@ -69,6 +71,7 @@ cdef class State:
         print(f"Velocities: {self.velocities}")
         print(f"Positions: {self.positions}")
         print(f"Bounds: {self.bounds}")
+        print(f"Fitnesses: {self.pbest_fitnesses}")
         print(f"Global best position: {self.gbest_position}")
         print(f"Global best fitness: {self.gbest_fitness}")
         print(f"Swarm size: {self.swarmSize}")
@@ -88,6 +91,23 @@ cdef class State:
                 random_position = np.random.uniform(self.bounds[j][0], self.bounds[j][1])
                 # Set the position
                 self.positions[i, j] = random_position
+
+    cdef void initialise_velocities(self):
+        cdef int i
+        cdef int j
+
+        for i in range(self.swarmSize):
+            for j in range(self.dimensions):
+                # Choose a random velocity within the bounds for that dimension
+                random_velocity = np.random.uniform(-1, 1)
+                # Set the velocity
+                self.velocities[i, j] = random_velocity
+
+    cdef double calculate_fitness(self, int particle_index):
+        cdef np.ndarray position = self.positions[particle_index]
+        assert len(position) == self.dimensions, "Argument 'position' must have the same length as the number of dimensions."
+        cdef double fitness = self.objective_function(*position)
+        return fitness
 
 
         
@@ -226,4 +246,9 @@ def particleswarm(objective_function, swarm_size, max_iterations, w, c1, c2, dim
     pso.print_class_variables()
     print(f"Initialising positions")
     pso.initialise_positions()
+    pso.pbest_fitnesses[0] = pso.calculate_fitness(0)
+    pso.pbest_fitnesses[1] = pso.calculate_fitness(1)
+    pso.print_class_variables()
+    print(f"Initialising velocities")
+    pso.initialise_velocities()
     pso.print_class_variables()
