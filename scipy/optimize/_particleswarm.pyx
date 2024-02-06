@@ -71,7 +71,7 @@ cdef class State:
         print(f"Velocities: {self.velocities}")
         print(f"Positions: {self.positions}")
         print(f"Bounds: {self.bounds}")
-        print(f"Fitnesses: {self.pbest_fitnesses}")
+        print(f"Pbest Fitnesses: {self.pbest_fitnesses}")
         print(f"Global best position: {self.gbest_position}")
         print(f"Global best fitness: {self.gbest_fitness}")
         print(f"Swarm size: {self.swarmSize}")
@@ -109,6 +109,46 @@ cdef class State:
         cdef double fitness = self.objective_function(*position)
         return fitness
 
+    cdef double calculate_fitness_and_update(self, int particle_index):
+        cdef double fitness = self.calculate_fitness(particle_index)
+        # Update the pbest fitness if the new fitness is better
+        if fitness < self.pbest_fitnesses[particle_index]:
+            self.pbest_fitnesses[particle_index] = fitness
+        return fitness
+
+    cdef void initialise_fitnesses(self):
+        cdef int i
+        for i in range(self.swarmSize):
+            self.pbest_fitnesses[i] = self.calculate_fitness(i)
+
+    cdef void update_veocity(self, int particle_index):
+        cdef int i
+        cdef double r1
+        cdef double r2
+        cdef double cognitive_component
+        cdef double social_component
+        cdef np.ndarray velocity = self.velocities[particle_index]
+        cdef np.ndarray position = self.positions[particle_index]
+        cdef np.ndarray pbest = self.positions[particle_index]
+        cdef np.ndarray gbest_position = self.gbest_position
+
+        for i in range(self.dimensions):
+            r1 = np.random.uniform(0, 1)
+            r2 = np.random.uniform(0, 1)
+
+            cognitive_component = self.c1 * r1 * (pbest[i] - position[i])
+            social_component = self.c2 * r2 * (gbest_position[i] - position[i])
+
+            self.velocities[particle_index][i] = self.w * velocity[i] + cognitive_component + social_component
+
+    cdef void update_gbest(self):
+        cdef int i 
+        for i in range(self.swarmSize):
+            if self.pbest_fitnesses[i] < self.gbest_fitness:
+                # Take copies so that we don't have to worry about the memory being overwritten
+                self.gbest_fitness = self.pbest_fitnesses[i].copy()
+                self.gbest_position = self.positions[i].copy()
+    
 
         
 
@@ -246,8 +286,8 @@ def particleswarm(objective_function, swarm_size, max_iterations, w, c1, c2, dim
     pso.print_class_variables()
     print(f"Initialising positions")
     pso.initialise_positions()
-    pso.pbest_fitnesses[0] = pso.calculate_fitness(0)
-    pso.pbest_fitnesses[1] = pso.calculate_fitness(1)
+    pso.initialise_fitnesses()
+    pso.update_gbest()
     pso.print_class_variables()
     print(f"Initialising velocities")
     pso.initialise_velocities()
