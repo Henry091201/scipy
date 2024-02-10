@@ -49,6 +49,9 @@ cdef class State:
     cdef int dimensions
     cdef object objective_function
 
+    # State variables
+    cdef int current_iteration
+
     def __cinit__(self, object objective_function, int swarm_size, int max_iterations, float w, float c1, float c2, int dimensions, np.ndarray bounds = None):
         #TODO: Look into using memoryviews for the arrays --> https://cython.readthedocs.io/en/latest/src/userguide/memoryviews.html
         self.velocities = np.zeros((swarm_size, dimensions))
@@ -67,6 +70,47 @@ cdef class State:
         self.dimensions = dimensions
         self.objective_function = objective_function
     
+        self.current_iteration = 0
+
+    def setup(self):
+        self.initialise_positions()
+        # Initialise fitnesses
+        self.initialise_fitnesses()
+        # Update the global best
+        self.update_gbest()
+        # initialise velocities
+        self.initialise_velocities()
+        print(f"Initialised everything")
+        print(self.print_class_variables())
+
+    def __next__(self):
+        if self.current_iteration >= self.max_iterations:
+            raise StopIteration
+        # Do a single interation
+        # Update the positions
+        self.update_all_positions()
+        # Update the fitnesses
+        self.calculate_all_fitnesses()
+        # Update the global best
+        self.update_gbest()
+        # Update the velocities
+        self.update_all_velocities()
+
+        self.current_iteration += 1
+
+    def __iter__(self):
+        return self
+
+    def solve(self):
+        cdef int i
+        for i in range(self.max_iterations + 1):
+            try:
+                next(self)
+            except StopIteration:
+                print("Finished")
+                self.print_class_variables()
+                break
+
     def print_class_variables(self):
         print(f"Velocities: {self.velocities}")
         print(f"Positions: {self.positions}")
@@ -181,36 +225,9 @@ cdef class State:
                 # Take copies so that we don't have to worry about the memory being overwritten
                 self.gbest_fitness = self.pbest_fitnesses[i].copy()
                 self.gbest_position = self.positions[i].copy()
-    
-    cdef void run(self):
-        # Initialise positions
-        self.initialise_positions()
-        # Initialise fitnesses
-        self.initialise_fitnesses()
-        # Update the global best
-        self.update_gbest()
-        # initialise velocities
-        self.initialise_velocities()
-        print(f"Initialised everything")
-        print(self.print_class_variables())
-
-
-        # Main loop 
-        cdef int i
-        for i in range(self.max_iterations):
-            # Update the positions
-            self.update_all_positions()
-            # Update the fitnesses
-            self.calculate_all_fitnesses()
-            # Update the global best
-            self.update_gbest()
-            # Update the velocities
-            self.update_all_velocities()
-
-        print(f"Finished running")
-        self.print_class_variables()
 
 def particleswarm(objective_function, swarm_size, max_iterations, w, c1, c2, dimensions, bounds=None):
     pso = State(objective_function, swarm_size, max_iterations, w, c1, c2, dimensions, bounds)
-    pso.run()
+    pso.setup()
+    pso.solve()
 
