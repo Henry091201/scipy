@@ -33,8 +33,11 @@ cdef double ackley_function_2d(x, y):
 cdef class State:
     cdef np.ndarray velocities 
     cdef np.ndarray positions 
+
     cdef np.ndarray bounds 
+
     cdef np.ndarray pbest_fitnesses
+    cdef np.ndarray pbest_fitness_positions
 
     # Global best position and fitness
     cdef int max_iterations
@@ -56,8 +59,11 @@ cdef class State:
         #TODO: Look into using memoryviews for the arrays --> https://cython.readthedocs.io/en/latest/src/userguide/memoryviews.html
         self.velocities = np.zeros((swarm_size, dimensions))
         self.positions = np.zeros((swarm_size, dimensions))
+
         self.bounds = bounds
+
         self.pbest_fitnesses = np.zeros(swarm_size)
+        self.pbest_fitness_positions = np.zeros((swarm_size, dimensions))
 
         self.max_iterations = max_iterations
         self.gbest_position = np.zeros(dimensions)
@@ -116,6 +122,7 @@ cdef class State:
         print(f"Positions: {self.positions}")
         print(f"Bounds: {self.bounds}")
         print(f"Pbest Fitnesses: {self.pbest_fitnesses}")
+        print(f"Pbest Fitness Positions: {self.pbest_fitness_positions}")
         print(f"Global best position: {self.gbest_position}")
         print(f"Global best fitness: {self.gbest_fitness}")
         print(f"Swarm size: {self.swarmSize}")
@@ -163,6 +170,7 @@ cdef class State:
         # Update the pbest fitness if the new fitness is better
         if fitness < self.pbest_fitnesses[particle_index]:
             self.pbest_fitnesses[particle_index] = fitness
+            self.pbest_fitness_positions[particle_index] = self.positions[particle_index].copy()
         # If the new position is out of bounds, set the particles fitness to infinity
         # This will cause the particle to be ignored in the next iteration but still be in the swarm
         # with the potential to be reactivated
@@ -179,6 +187,7 @@ cdef class State:
         cdef int i
         for i in range(self.swarmSize):
             self.pbest_fitnesses[i] = self.calculate_fitness(i)
+            self.pbest_fitness_positions[i] = self.positions[i].copy()
 
     cdef void update_veocity(self, int particle_index):
         cdef int i
@@ -186,10 +195,10 @@ cdef class State:
         cdef double r2
         cdef double cognitive_component
         cdef double social_component
-        cdef np.ndarray velocity = self.velocities[particle_index]
-        cdef np.ndarray position = self.positions[particle_index]
-        cdef np.ndarray pbest = self.positions[particle_index]
-        cdef np.ndarray gbest_position = self.gbest_position
+        cdef np.ndarray velocity = self.velocities[particle_index].copy()
+        cdef np.ndarray position = self.positions[particle_index].copy()
+        cdef np.ndarray pbest = self.pbest_fitness_positions[particle_index].copy()
+        cdef np.ndarray gbest_position = self.gbest_position.copy()
 
         for i in range(self.dimensions):
             r1 = np.random.uniform(0, 1)
@@ -230,4 +239,3 @@ def particleswarm(objective_function, swarm_size, max_iterations, w, c1, c2, dim
     pso = State(objective_function, swarm_size, max_iterations, w, c1, c2, dimensions, bounds)
     pso.setup()
     pso.solve()
-
