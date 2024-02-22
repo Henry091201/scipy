@@ -51,11 +51,12 @@ cdef class State:
     cdef float c2
     cdef int dimensions
     cdef object objective_function
+    cdef object topology
 
     # State variables
     cdef int current_iteration
 
-    def __cinit__(self, object objective_function, int swarm_size, int max_iterations, float w, float c1, float c2, int dimensions, np.ndarray bounds = None):
+    def __cinit__(self, object objective_function, int swarm_size, int max_iterations, float w, float c1, float c2, int dimensions, np.ndarray bounds = None, object topology = None):
         #TODO: Look into using memoryviews for the arrays --> https://cython.readthedocs.io/en/latest/src/userguide/memoryviews.html
         self.velocities = np.zeros((swarm_size, dimensions))
         self.positions = np.zeros((swarm_size, dimensions))
@@ -75,6 +76,7 @@ cdef class State:
         self.c2 = c2
         self.dimensions = dimensions
         self.objective_function = objective_function
+        self.topology = topology
     
         self.current_iteration = 0
 
@@ -200,12 +202,21 @@ cdef class State:
         cdef np.ndarray pbest = self.pbest_fitness_positions[particle_index].copy()
         cdef np.ndarray gbest_position = self.gbest_position.copy()
 
+        # Find the particles neighbors that it can share information with
+        neighbors = self.topology(particle_index)
+
+        best_neighbor = neighbors[0]
+        # Find the best neighbor
+        for index in neighbors:
+            if self.pbest_fitnesses[index] < self.pbest_fitnesses[best_neighbor]:
+                best_neighbor = index
+
         for i in range(self.dimensions):
             r1 = np.random.uniform(0, 1)
             r2 = np.random.uniform(0, 1)
 
             cognitive_component = self.c1 * r1 * (pbest[i] - position[i])
-            social_component = self.c2 * r2 * (gbest_position[i] - position[i])
+            social_component = self.c2 * r2 * (self.pbest_fitness_positions[best_neighbor[i]] - position[i])
 
             self.velocities[particle_index][i] = self.w * velocity[i] + cognitive_component + social_component
 
