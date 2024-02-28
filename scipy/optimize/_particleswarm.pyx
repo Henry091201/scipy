@@ -1,14 +1,14 @@
 import numpy as np
 cimport numpy as np
 
-__all__ = ['particleswarm, rastrigin, ackley_function_2d']
+__all__ = ['rastrigin']
 
-cdef double rastrigin(x, y):
+cpdef double rastrigin(x, y):
     # Rastrigin function for demonstration purposes
     cdef double rast = 20 + x ** 2 + y ** 2 - 10 * (np.cos(2 * np.pi * x) + np.cos(2 * np.pi * y))
     return rast
 
-cdef double ackley_function_2d(x, y):
+cpdef double ackley_function_2d(x, y):
     """
     Ackley function for 2-dimensional input.
 
@@ -30,6 +30,10 @@ cdef double ackley_function_2d(x, y):
 
     return value
 
+cpdef gbest(State pso, int particleIndex):
+    cdef int swarmSize = pso.get_swarm_size()
+    return np.arange(swarmSize)
+    
 cdef class State:
     cdef np.ndarray velocities 
     cdef np.ndarray positions 
@@ -56,7 +60,7 @@ cdef class State:
     # State variables
     cdef int current_iteration
 
-    def __cinit__(self, object objective_function, int swarm_size, int max_iterations, float w, float c1, float c2, int dimensions, np.ndarray bounds = None, object topology = None):
+    def __cinit__(self, object objective_function, int swarm_size, int max_iterations, float w, float c1, float c2, int dimensions, np.ndarray bounds = None, object topology = gbest):
         #TODO: Look into using memoryviews for the arrays --> https://cython.readthedocs.io/en/latest/src/userguide/memoryviews.html
         self.velocities = np.zeros((swarm_size, dimensions))
         self.positions = np.zeros((swarm_size, dimensions))
@@ -203,7 +207,7 @@ cdef class State:
         cdef np.ndarray gbest_position = self.gbest_position.copy()
 
         # Find the particles neighbors that it can share information with
-        neighbors = self.topology(particle_index)
+        neighbors = self.topology(self, particle_index)
 
         best_neighbor = neighbors[0]
         # Find the best neighbor
@@ -216,7 +220,7 @@ cdef class State:
             r2 = np.random.uniform(0, 1)
 
             cognitive_component = self.c1 * r1 * (pbest[i] - position[i])
-            social_component = self.c2 * r2 * (self.pbest_fitness_positions[best_neighbor[i]] - position[i])
+            social_component = self.c2 * r2 * (self.pbest_fitness_positions[best_neighbor][i] - position[i])
 
             self.velocities[particle_index][i] = self.w * velocity[i] + cognitive_component + social_component
 
@@ -246,7 +250,10 @@ cdef class State:
                 self.gbest_fitness = self.pbest_fitnesses[i].copy()
                 self.gbest_position = self.positions[i].copy()
 
-def particleswarm(objective_function, swarm_size, max_iterations, w, c1, c2, dimensions, bounds=None):
-    pso = State(objective_function, swarm_size, max_iterations, w, c1, c2, dimensions, bounds)
+    cpdef int get_swarm_size(self):
+        return self.swarmSize
+
+cpdef particleswarm(objective_function, swarm_size, max_iterations, w, c1, c2, dimensions, bounds=None, topology = gbest):
+    pso = State(objective_function, swarm_size, max_iterations, w, c1, c2, dimensions, bounds, topology)
     pso.setup()
     pso.solve()
