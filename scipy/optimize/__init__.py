@@ -423,6 +423,7 @@ from ._nonlin import *
 from ._slsqp_py import fmin_slsqp
 from ._nnls import nnls
 from ._basinhopping import basinhopping
+from ._particleswarm import particleswarm, gbest, rastrigin
 from ._linprog import linprog, linprog_verbose_callback
 from ._lsap import linear_sum_assignment
 from ._differentialevolution import differential_evolution
