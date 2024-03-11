@@ -1,12 +1,18 @@
+import cython
+cimport numpy as np
+from libcpp cimport bool
+from libc.math cimport exp, sqrt, cos, pi
+from libc.stdlib cimport malloc, free
+
 import numpy as np
 
 from scipy.optimize import OptimizeResult
 
-__all__ = ['rastrigin']
+__all__ = ['particleswarm']
 
 cpdef double rastrigin(x, y):
     # Rastrigin function for demonstration purposes
-    cdef double rast = 20 + x ** 2 + y ** 2 - 10 * (np.cos(2 * np.pi * x) + np.cos(2 * np.pi * y))
+    cdef double rast = 20 + x ** 2 + y ** 2 - 10 * (cos(2 * pi * x) + cos(2 * pi * y))
     return rast
 
 cpdef double ackley_function_2d(x, y):
@@ -22,18 +28,35 @@ cpdef double ackley_function_2d(x, y):
     """
     a = 20
     b = 0.2
-    c = 2 * np.pi
+    c = 2 * pi
 
-    term1 = -a * np.exp(-b * np.sqrt(0.5 * (x**2 + y**2)))
-    term2 = -np.exp(0.5 * (np.cos(c * x) + np.cos(c * y)))
+    term1 = -a * exp(-b * sqrt(0.5 * (x**2 + y**2)))
+    term2 = -exp(0.5 * (cos(c * x) + cos(c * y)))
 
-    value = term1 + term2 + a + np.exp(1)
+    value = term1 + term2 + a + exp(1)
 
     return value
-
+"""
 cpdef gbest(State pso, int particleIndex):
     cdef int swarmSize = pso.get_swarm_size()
-    return np.arange(swarmSize)
+    cdef int[:] arr = np.empty(swarmSize, dtype=np.int32)
+    for i in range(swarmSize):
+        arr[i] = i
+    return arr
+"""
+cpdef int[:] gbest(State pso, int particleIndex):
+    cdef int swarmSize = pso.get_swarm_size()
+    cdef int *arr = <int *>malloc(swarmSize * sizeof(int))
+    if arr == NULL:
+        raise MemoryError()
+    cdef int[:] result_view = <int[:swarmSize]>arr
+    try:
+        for i in range(swarmSize):
+            arr[i] = i
+        return result_view
+    except:
+        free(arr)
+        raise
     
 cdef class State:
     cdef np.ndarray velocities 
@@ -63,11 +86,13 @@ cdef class State:
 
     cdef int seed
 
-    cdef object result
+    cdef object package_result
 
     cdef char* message
+    cdef int niter_success
+    cdef int niter_at_gbest
 
-    def __cinit__(self, object objective_function, int swarm_size, int max_iterations, float w, float c1, float c2, int dimensions, np.ndarray bounds = None, object topology = gbest, int seed = None, int niter_success = -1):
+    def __cinit__(self, object objective_function, int swarm_size, int max_iterations, float w, float c1, float c2, int dimensions, np.ndarray bounds = None, object topology = gbest, int seed = -1, int niter_success = -1):
         #TODO: Look into using memoryviews for the arrays --> https://cython.readthedocs.io/en/latest/src/userguide/memoryviews.html
         self.velocities = np.zeros((swarm_size, dimensions))
         self.positions = np.zeros((swarm_size, dimensions))
@@ -93,12 +118,11 @@ cdef class State:
         self.niter_success = niter_success
         self.niter_at_gbest = 0
 
-        if seed is not None:
+        if seed != -1:
             np.random.seed(seed)
 
-        self.result = OptimizeResult()
 
-    def setup(self):
+    cdef void setup(self):
         self.initialise_positions()
         # Initialise fitnesses
         self.initialise_fitnesses()
@@ -106,8 +130,8 @@ cdef class State:
         self.update_gbest()
         # initialise velocities
         self.initialise_velocities()
-        print(f"Initialised everything")
-        print(self.print_class_variables())
+        ##print(f"Initialised everything")
+        #print(self.print_class_variables())
 
     def __next__(self):
         if self.current_iteration >= self.max_iterations:
@@ -132,20 +156,20 @@ cdef class State:
     def __iter__(self):
         return self
 
-    def solve(self):
+    cdef solve(self):
         cdef int i
         for i in range(self.max_iterations + 1):
             try:
                 next(self)
             except StopIteration:
-                print("Finished")
-                self.print_class_variables()
+                #print("Finished")
+                #self.print_class_variables()
                 break
-        self.result = self.result(nit=self.current_iteration, nfev=self.current_iteration * self.swarmSize, 
-        success=True, message=self.message)
-        return self.result
+        
+        return self.package_result(self.message)
 
     def print_class_variables(self):
+        """
         print(f"Velocities: {self.velocities}")
         print(f"Positions: {self.positions}")
         print(f"Bounds: {self.bounds}")
@@ -159,16 +183,22 @@ cdef class State:
         print(f"c2: {self.c2}")
         print(f"Dimensions: {self.dimensions}")
         print(f"Objective function: {self.objective_function}")
+        """
 
-    def result(self):
-        cdef object result = OptimizeResult()
-        result.x = self.gbest_position
-        result.fun = self.gbest_fitness
-        result.population = self.positions
-        result.nit = self.current_iteration
-        result.nfev = self.current_iteration * self.swarmSize
-        result.success = True
-        result.message = self.message
+    @cython.boundscheck(False)
+    @cython.wraparound(False)
+    def package_result(self, message):
+        cdef object result = OptimizeResult(
+        x = self.gbest_position,
+        fun = self.gbest_fitness,
+        population = self.positions,
+        nit = self.current_iteration,
+        nfev = self.current_iteration * self.swarmSize,
+        success = True,
+        message = message
+        )
+        #print(f"Finished writing the results")
+        #print(result.keys())
         return result
         
 
@@ -238,7 +268,6 @@ cdef class State:
         cdef np.ndarray velocity = self.velocities[particle_index].copy()
         cdef np.ndarray position = self.positions[particle_index].copy()
         cdef np.ndarray pbest = self.pbest_fitness_positions[particle_index].copy()
-        cdef np.ndarray gbest_position = self.gbest_position.copy()
 
         # Find the particles neighbors that it can share information with
         neighbors = self.topology(self, particle_index)
@@ -278,23 +307,26 @@ cdef class State:
 
     cdef void update_gbest(self):
         cdef int i 
-        cdef bool updated = False
+        cdef bint updated = False
         for i in range(self.swarmSize):
             if self.pbest_fitnesses[i] < self.gbest_fitness:
                 # Take copies so that we don't have to worry about the memory being overwritten
                 self.gbest_fitness = self.pbest_fitnesses[i].copy()
                 self.gbest_position = self.positions[i].copy()
                 updated = True
-        if updated == False:
+        if updated:
+            self.niter_at_gbest = 0
+        else:
             # If no particle has a better fitness than the global best, increment the counter
             self.niter_at_gbest += 1
+
             
 
     cpdef int get_swarm_size(self):
         return self.swarmSize
 
 cpdef particleswarm(objective_function, swarm_size, max_iterations, w, c1, c2,
-                     dimensions, bounds=None, topology = gbest, seed = None, niter_success = -1):
-    pso = State(objective_function, swarm_size, max_iterations, w, c1, c2, dimensions, bounds, topology, seed)
+                     dimensions, bounds=None, topology = gbest, seed = -1, niter_success = -1):
+    pso = State(objective_function, swarm_size, max_iterations, w, c1, c2, dimensions, bounds, topology, seed, niter_success)
     pso.setup()
     return pso.solve()
