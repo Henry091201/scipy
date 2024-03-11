@@ -1,5 +1,6 @@
 import numpy as np
-cimport numpy as np
+
+from scipy.optimize import OptimizeResult
 
 __all__ = ['rastrigin']
 
@@ -60,7 +61,13 @@ cdef class State:
     # State variables
     cdef int current_iteration
 
-    def __cinit__(self, object objective_function, int swarm_size, int max_iterations, float w, float c1, float c2, int dimensions, np.ndarray bounds = None, object topology = gbest):
+    cdef int seed
+
+    cdef object result
+
+    cdef char* message
+
+    def __cinit__(self, object objective_function, int swarm_size, int max_iterations, float w, float c1, float c2, int dimensions, np.ndarray bounds = None, object topology = gbest, int seed = None, int niter_success = -1):
         #TODO: Look into using memoryviews for the arrays --> https://cython.readthedocs.io/en/latest/src/userguide/memoryviews.html
         self.velocities = np.zeros((swarm_size, dimensions))
         self.positions = np.zeros((swarm_size, dimensions))
@@ -83,6 +90,13 @@ cdef class State:
         self.topology = topology
     
         self.current_iteration = 0
+        self.niter_success = niter_success
+        self.niter_at_gbest = 0
+
+        if seed is not None:
+            np.random.seed(seed)
+
+        self.result = OptimizeResult()
 
     def setup(self):
         self.initialise_positions()
@@ -97,6 +111,11 @@ cdef class State:
 
     def __next__(self):
         if self.current_iteration >= self.max_iterations:
+            self.message = "Maximum number of iterations reached"
+            raise StopIteration
+
+        if self.niter_success > 0 and self.niter_at_gbest >= self.niter_success:
+            self.message = "Maximum number of iterations at global best reached"
             raise StopIteration
         # Do a single interation
         # Update the positions
@@ -122,6 +141,9 @@ cdef class State:
                 print("Finished")
                 self.print_class_variables()
                 break
+        self.result = self.result(nit=self.current_iteration, nfev=self.current_iteration * self.swarmSize, 
+        success=True, message=self.message)
+        return self.result
 
     def print_class_variables(self):
         print(f"Velocities: {self.velocities}")
@@ -137,6 +159,18 @@ cdef class State:
         print(f"c2: {self.c2}")
         print(f"Dimensions: {self.dimensions}")
         print(f"Objective function: {self.objective_function}")
+
+    def result(self):
+        cdef object result = OptimizeResult()
+        result.x = self.gbest_position
+        result.fun = self.gbest_fitness
+        result.population = self.positions
+        result.nit = self.current_iteration
+        result.nfev = self.current_iteration * self.swarmSize
+        result.success = True
+        result.message = self.message
+        return result
+        
 
     cdef void initialise_positions(self):
         cdef int i
@@ -244,16 +278,23 @@ cdef class State:
 
     cdef void update_gbest(self):
         cdef int i 
+        cdef bool updated = False
         for i in range(self.swarmSize):
             if self.pbest_fitnesses[i] < self.gbest_fitness:
                 # Take copies so that we don't have to worry about the memory being overwritten
                 self.gbest_fitness = self.pbest_fitnesses[i].copy()
                 self.gbest_position = self.positions[i].copy()
+                updated = True
+        if updated == False:
+            # If no particle has a better fitness than the global best, increment the counter
+            self.niter_at_gbest += 1
+            
 
     cpdef int get_swarm_size(self):
         return self.swarmSize
 
-cpdef particleswarm(objective_function, swarm_size, max_iterations, w, c1, c2, dimensions, bounds=None, topology = gbest):
-    pso = State(objective_function, swarm_size, max_iterations, w, c1, c2, dimensions, bounds, topology)
+cpdef particleswarm(objective_function, swarm_size, max_iterations, w, c1, c2,
+                     dimensions, bounds=None, topology = gbest, seed = None, niter_success = -1):
+    pso = State(objective_function, swarm_size, max_iterations, w, c1, c2, dimensions, bounds, topology, seed)
     pso.setup()
-    pso.solve()
+    return pso.solve()
