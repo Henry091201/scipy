@@ -36,6 +36,28 @@ cpdef double ackley_function_2d(x, y):
     value = term1 + term2 + a + exp(1)
 
     return value
+
+cpdef hartman_6(x1, x2, x3, x4, x5, x6):
+    x = np.array([x1, x2, x3, x4, x5, x6])
+    alpha = np.array([1.0, 1.2, 3.0, 3.2])
+    A = np.array([[10, 3, 17, 3.5, 1.7, 8],
+                  [0.05, 10, 17, 0.1, 8, 14],
+                  [3, 3.5, 1.7, 10, 17, 8],
+                  [17, 8, 0.05, 10, 0.1, 14]])
+    P = 10**(-4) * np.array([[1312, 1696, 5569, 124, 8283, 5886],
+                             [2329, 4135, 8307, 3736, 1004, 9991],
+                             [2348, 1451, 3522, 2883, 3047, 6650],
+                             [4047, 8828, 8732, 5743, 1091, 381]])
+
+    outer_sum = 0
+    for i in range(4):
+        inner_sum = 0
+        for j in range(6):
+            inner_sum += A[i, j] * ((x[j] - P[i, j])**2)
+        outer_sum += alpha[i] * np.exp(-inner_sum)
+
+    return -outer_sum 
+
 """
 cpdef gbest(State pso, int particleIndex):
     cdef int swarmSize = pso.get_swarm_size()
@@ -59,7 +81,7 @@ cpdef int[:] gbest(State pso, int particleIndex):
         raise
     
 cdef class State:
-    cdef np.ndarray velocities 
+    cdef np.ndarray velocities
     cdef np.ndarray positions 
 
     cdef np.ndarray bounds 
@@ -168,7 +190,7 @@ cdef class State:
         
         return self.package_result(self.message)
 
-    def print_class_variables(self):
+    cdef print_class_variables(self):
         """
         print(f"Velocities: {self.velocities}")
         print(f"Positions: {self.positions}")
@@ -261,10 +283,7 @@ cdef class State:
 
     cdef void update_veocity(self, int particle_index):
         cdef int i
-        cdef double r1
-        cdef double r2
-        cdef double cognitive_component
-        cdef double social_component
+        cdef double r1, r2, cognitive_component, social_component
         cdef np.ndarray velocity = self.velocities[particle_index].copy()
         cdef np.ndarray position = self.positions[particle_index].copy()
         cdef np.ndarray pbest = self.pbest_fitness_positions[particle_index].copy()
@@ -325,8 +344,8 @@ cdef class State:
     cpdef int get_swarm_size(self):
         return self.swarmSize
 
-cpdef particleswarm(objective_function, swarm_size, max_iterations, w, c1, c2,
-                     dimensions, bounds=None, topology = gbest, seed = -1, niter_success = -1):
+cpdef particleswarm(object objective_function, int swarm_size, int max_iterations, float w, float c1, float c2,
+                     int dimensions, np.ndarray bounds=None, object topology = gbest, int seed = -1, int niter_success = -1):
     pso = State(objective_function, swarm_size, max_iterations, w, c1, c2, dimensions, bounds, topology, seed, niter_success)
     pso.setup()
     return pso.solve()
