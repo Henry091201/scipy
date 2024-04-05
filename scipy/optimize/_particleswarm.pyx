@@ -114,7 +114,9 @@ cdef class State:
     cdef int niter_success
     cdef int niter_at_gbest
 
-    def __cinit__(self, object objective_function, int swarm_size, int max_iterations, float w, float c1, float c2, int dimensions, np.ndarray bounds = None, object topology = gbest, int seed = -1, int niter_success = -1):
+    cdef float max_velocity
+
+    def __cinit__(self, object objective_function, int swarm_size, int max_iterations, float w, float c1, float c2, int dimensions, np.ndarray bounds = None, object topology = gbest, int seed = -1, int niter_success = -1, float max_velocity = -1.0):
         #TODO: Look into using memoryviews for the arrays --> https://cython.readthedocs.io/en/latest/src/userguide/memoryviews.html
         self.velocities = np.zeros((swarm_size, dimensions))
         self.positions = np.zeros((swarm_size, dimensions))
@@ -140,6 +142,9 @@ cdef class State:
         self.niter_success = niter_success
         self.niter_at_gbest = 0
 
+        self.max_velocity = max_velocity
+
+        self.seed = seed
         if seed != -1:
             np.random.seed(seed)
 
@@ -303,8 +308,19 @@ cdef class State:
 
             cognitive_component = self.c1 * r1 * (pbest[i] - position[i])
             social_component = self.c2 * r2 * (self.pbest_fitness_positions[best_neighbor][i] - position[i])
+            velocity_calculation = self.w * velocity[i] + cognitive_component + social_component
 
-            self.velocities[particle_index][i] = self.w * velocity[i] + cognitive_component + social_component
+            # If the max velocity is set, cap the velocity
+            if self.max_velocity > 0:
+                velocity_calculation = self.cap_velocity(velocity_calculation, self.max_velocity)
+
+            self.velocities[particle_index][i] = velocity_calculation
+
+    cdef float cap_velocity(self, float vel, float max_velocity):
+        if vel > max_velocity:
+            return max_velocity
+        else:
+            return vel
 
     cdef void update_all_velocities(self):
         cdef int i
@@ -345,7 +361,9 @@ cdef class State:
         return self.swarmSize
 
 cpdef particleswarm(object objective_function, int swarm_size, int max_iterations, float w, float c1, float c2,
-                     int dimensions, np.ndarray bounds=None, object topology = gbest, int seed = -1, int niter_success = -1):
-    pso = State(objective_function, swarm_size, max_iterations, w, c1, c2, dimensions, bounds, topology, seed, niter_success)
+                     int dimensions, np.ndarray bounds=None, object topology = gbest, int seed = -1, int niter_success = -1,
+                    max_velocity = -1):
+    pso = State(objective_function, swarm_size, max_iterations, w, c1, c2, dimensions, bounds, topology, seed, niter_success,
+                max_velocity)
     pso.setup()
     return pso.solve()
