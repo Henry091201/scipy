@@ -80,7 +80,35 @@ cpdef int[:] gbest(State pso, int particleIndex):
     except:
         free(arr)
         raise
-    
+
+cdef void _update_position(float [:, :] position, float [:, :] velocity, int swarm_size):
+    cdef int i, j
+    for i in range(swarm_size):
+        for j in range(position.shape[1]):
+            position[i, j] += velocity[i, j]
+
+cdef float _calculate_fitness(float [:, :] positions, int particleIndex, object objective_function, int dimensions):
+    cdef float fitness = 0.0
+    cdef int i
+    fitness = objective_function(positions[particleIndex, 0], positions[particleIndex, 1])
+    return fitness
+
+cdef void _update_fitness(float fitness, float [:] pbest_fitnesses, float [:, :] pbest_fitness_positions, int particleIndex,
+                          float [:, :] positions, int dimensions):
+    cdef int i
+    if fitness < pbest_fitnesses[particleIndex]:
+        pbest_fitnesses[particleIndex] = fitness
+        # Update the position of the particle
+        for i in range(dimensions):
+            pbest_fitness_positions[particleIndex, i] = positions[particleIndex, i]
+
+cdef float _calculate_and_update_fitness(float [:, :] positions, float [:] pbest_fitnesses, float [:, :] pbest_fitness_positions, int particleIndex,
+                                       object objective_function, int dimensions):
+    cdef float fitness = _calculate_fitness(positions, particleIndex, objective_function, dimensions)
+    _update_fitness(fitness, pbest_fitnesses, pbest_fitness_positions, particleIndex, positions, dimensions)
+
+    return fitness
+
 cdef class State:
     cdef np.ndarray velocities
     cdef np.ndarray positions 
@@ -89,6 +117,11 @@ cdef class State:
 
     cdef np.ndarray pbest_fitnesses
     cdef np.ndarray pbest_fitness_positions
+
+    cdef float [:, :] velocities_view
+    cdef float [:, :] positions_view
+    cdef float [:] pbest_fitnesses_view
+    cdef float [:, :] pbest_fitness_positions_view
 
     # Global best position and fitness
     cdef int max_iterations
@@ -119,13 +152,18 @@ cdef class State:
 
     def __cinit__(self, object objective_function, int swarm_size, int max_iterations, float w, float c1, float c2, int dimensions, np.ndarray bounds = None, object topology = gbest, int seed = -1, int niter_success = -1, float max_velocity = -1.0):
         #TODO: Look into using memoryviews for the arrays --> https://cython.readthedocs.io/en/latest/src/userguide/memoryviews.html
-        self.velocities = np.zeros((swarm_size, dimensions))
-        self.positions = np.zeros((swarm_size, dimensions))
+        self.velocities = np.zeros((swarm_size, dimensions), dtype=np.float32)
+        self.positions = np.zeros((swarm_size, dimensions), dtype=np.float32)
 
         self.bounds = bounds
 
-        self.pbest_fitnesses = np.zeros(swarm_size)
-        self.pbest_fitness_positions = np.zeros((swarm_size, dimensions))
+        self.pbest_fitnesses = np.zeros(swarm_size, dtype=np.float32)
+        self.pbest_fitness_positions = np.zeros((swarm_size, dimensions), dtype=np.float32)
+
+        self.velocities_view = self.velocities
+        self.positions_view = self.positions
+        self.pbest_fitnesses_view = self.pbest_fitnesses
+        self.pbest_fitness_positions_view = self.pbest_fitness_positions
 
         self.max_iterations = max_iterations
         self.gbest_position = np.zeros(dimensions)
@@ -171,7 +209,8 @@ cdef class State:
             raise StopIteration
         # Do a single interation
         # Update the positions
-        self.update_all_positions()
+        _update_position(self.positions_view, self.velocities_view, self.swarmSize)
+        # self.update_all_positions()
         # Update the fitnesses
         self.calculate_all_fitnesses()
         # Update the global best
@@ -250,17 +289,19 @@ cdef class State:
         if fitness < self.pbest_fitnesses[particle_index]:
             self.pbest_fitnesses[particle_index] = fitness
             self.pbest_fitness_positions[particle_index] = self.positions[particle_index].copy()
-        # If the new position is out of bounds, set the particles fitness to infinity
-        # This will cause the particle to be ignored in the next iteration but still be in the swarm
-        # with the potential to be reactivated
-        if np.any(self.positions[particle_index] < self.bounds[:, 0]) or np.any(self.positions[particle_index] > self.bounds[:, 1]):
-            self.pbest_fitnesses[particle_index] = np.inf
+            # If the new position is out of bounds, set the particles fitness to infinity
+            # This will cause the particle to be ignored in the next iteration but still be in the swarm
+            # with the potential to be reactivated
+            if np.any(self.positions[particle_index] < self.bounds[:, 0]) or np.any(self.positions[particle_index] > self.bounds[:, 1]):
+                self.pbest_fitnesses[particle_index] = np.inf
         return fitness
 
     cdef void calculate_all_fitnesses(self):
         cdef int i
         for i in range(self.swarmSize):
-            self.calculate_fitness_and_update(i)
+            _calculate_and_update_fitness(positions=self.positions_view, pbest_fitness_positions=self.pbest_fitness_positions_view,
+                                          pbest_fitnesses=self.pbest_fitnesses_view, particleIndex=i, objective_function=self.objective_function,
+                                          dimensions=self.dimensions)
 
     cdef void initialise_fitnesses(self):
         cdef int i
