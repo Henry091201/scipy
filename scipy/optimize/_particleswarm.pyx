@@ -1,10 +1,11 @@
-import cython
 cimport numpy as np
 from libcpp cimport bool
 from libc.math cimport exp, sqrt, cos, pi
 from libc.stdlib cimport malloc, free
 
 import numpy as np
+
+np.import_array()
 
 from scipy.optimize import OptimizeResult
 
@@ -195,25 +196,6 @@ cdef class State:
         
         return self.package_result(self.message)
 
-    cdef print_class_variables(self):
-        """
-        print(f"Velocities: {self.velocities}")
-        print(f"Positions: {self.positions}")
-        print(f"Bounds: {self.bounds}")
-        print(f"Pbest Fitnesses: {self.pbest_fitnesses}")
-        print(f"Pbest Fitness Positions: {self.pbest_fitness_positions}")
-        print(f"Global best position: {self.gbest_position}")
-        print(f"Global best fitness: {self.gbest_fitness}")
-        print(f"Swarm size: {self.swarmSize}")
-        print(f"w: {self.w}")
-        print(f"c1: {self.c1}")
-        print(f"c2: {self.c2}")
-        print(f"Dimensions: {self.dimensions}")
-        print(f"Objective function: {self.objective_function}")
-        """
-
-    @cython.boundscheck(False)
-    @cython.wraparound(False)
     def package_result(self, message):
         cdef object result = OptimizeResult(
         x = self.gbest_position,
