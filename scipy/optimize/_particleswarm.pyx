@@ -81,6 +81,19 @@ cpdef int[:] gbest(State pso, int particleIndex):
         free(arr)
         raise
 
+cdef tuple _update_gbest(float [:] pbest_fitnesses, float[:,:] positions, float gbest_fitness, int swarm_size):
+    cdef float gbest = gbest_fitness
+    cdef float gbest_x, gbest_y
+    cdef bint updated = False
+    cdef int i
+    for i in range(swarm_size):
+        if pbest_fitnesses[i] < gbest:
+            gbest = pbest_fitnesses[i]
+            gbest_x, gbest_y = positions[i]
+            updated = True
+
+    return updated, gbest, gbest_x, gbest_y
+
 cdef void _update_position(float [:, :] position, float [:, :] velocity, int swarm_size):
     cdef int i, j
     for i in range(swarm_size):
@@ -106,6 +119,7 @@ cdef float _calculate_and_update_fitness(float [:, :] positions, float [:] pbest
                                        object objective_function, int dimensions):
     cdef float fitness = _calculate_fitness(positions, particleIndex, objective_function, dimensions)
     _update_fitness(fitness, pbest_fitnesses, pbest_fitness_positions, particleIndex, positions, dimensions)
+    # TODO: Remember to do the bounds checking
 
     return fitness
 
@@ -364,15 +378,15 @@ cdef class State:
             self.update_position(i)
 
     cdef void update_gbest(self):
-        cdef int i 
         cdef bint updated = False
-        for i in range(self.swarmSize):
-            if self.pbest_fitnesses[i] < self.gbest_fitness:
-                # Take copies so that we don't have to worry about the memory being overwritten
-                self.gbest_fitness = self.pbest_fitnesses[i].copy()
-                self.gbest_position = self.positions[i].copy()
-                updated = True
+        cdef float gbest, gbest_x, gbest_y
+
+        updated, gbest, gbest_x, gbest_y = _update_gbest(pbest_fitnesses=self.pbest_fitnesses_view, positions=self.positions_view, gbest_fitness=self.gbest_fitness,
+                      swarm_size=self.swarmSize)
         if updated:
+            self.gbest_fitness = gbest
+            self.gbest_position[0] = gbest_x
+            self.gbest_position[1] = gbest_y
             self.niter_at_gbest = 0
         else:
             # If no particle has a better fitness than the global best, increment the counter
