@@ -11,12 +11,12 @@ from scipy.optimize import OptimizeResult
 
 __all__ = ['particleswarm']
 
-cpdef double rastrigin(x, y):
+cpdef float rastrigin(x, y):
     # Rastrigin function for demonstration purposes
-    cdef double rast = 20 + x ** 2 + y ** 2 - 10 * (cos(2 * pi * x) + cos(2 * pi * y))
+    cdef float rast = 20 + x ** 2 + y ** 2 - 10 * (cos(2 * pi * x) + cos(2 * pi * y))
     return rast
 
-cpdef double ackley_function_2d(x, y):
+cpdef float ackley_function_2d(x, y):
     """
     Ackley function for 2-dimensional input.
 
@@ -67,19 +67,14 @@ cpdef gbest(State pso, int particleIndex):
         arr[i] = i
     return arr
 """
-cpdef int[:] gbest(State pso, int particleIndex):
+cpdef np.ndarray gbest(State pso, int particleIndex):
+    cdef int i
     cdef int swarmSize = pso.get_swarm_size()
-    cdef int *arr = <int *>malloc(swarmSize * sizeof(int))
-    if arr == NULL:
-        raise MemoryError()
-    cdef int[:] result_view = <int[:swarmSize]>arr
-    try:
-        for i in range(swarmSize):
-            arr[i] = i
-        return result_view
-    except:
-        free(arr)
-        raise
+    cdef np.ndarray[np.int32_t, ndim=1] arr = np.empty(swarmSize, dtype=np.int32)
+    for i in range(swarmSize):
+        arr[i] = i
+    return arr
+
 
 cdef tuple _update_gbest(float [:] pbest_fitnesses, float[:,:] positions, float gbest_fitness, int swarm_size):
     cdef float gbest = gbest_fitness
@@ -123,6 +118,46 @@ cdef float _calculate_and_update_fitness(float [:, :] positions, float [:] pbest
 
     return fitness
 
+cdef int _find_best_neighbour(float [:] pbest_fitnesses, np.ndarray neighbours):
+    cdef int best_neighbour = neighbours[0]
+    cdef int i
+    for i in range(len(neighbours)):
+        if pbest_fitnesses[neighbours[i]] < pbest_fitnesses[best_neighbour]:
+            best_neighbour = neighbours[i]
+
+    return best_neighbour
+
+cdef float _cap_velocity(float vel, float max_velocity):
+    if vel > max_velocity:
+        return max_velocity
+    else:
+        return vel
+
+cdef void _update_velocity(float [:, :] velocity, float [:, :] positions, float [:, :] pbest_fitness_positions, float [:] pbest_fitnesses,
+                           float [:] gbest_position, float w, float c1, float c2, int dimensions, int swarm_size, object topology,
+                           float max_velocity):
+    print("WE NOW INSIDE THE VELOCITY UPDATE FUNCTION")
+    cdef int partIndex, best_neighbor, j
+    cdef float r1, r2
+    for partIndex in range(swarm_size):
+        # Find the neighbours in the topology
+        neighbours = topology(partIndex)
+        best_neighbor = _find_best_neighbour(pbest_fitnesses, neighbours)
+
+        for j in range(dimensions):
+            r1 = np.random.uniform(0, 1)
+            r2 = np.random.uniform(0, 1)
+
+            cognitive_component = c1 * r1 * (pbest_fitness_positions[partIndex][j] - positions[partIndex][j])
+            social_component = c2 * r2 * (pbest_fitness_positions[best_neighbor][j] - positions[partIndex][j])
+            velocity_calculation = w * velocity[partIndex][j] + cognitive_component + social_component
+
+            # If the max velocity is set, cap the velocity
+            if max_velocity > 0:
+                velocity_calculation = _cap_velocity(velocity_calculation, max_velocity)
+
+            velocity[partIndex][j] = velocity_calculation
+
 cdef class State:
     cdef np.ndarray velocities
     cdef np.ndarray positions 
@@ -140,7 +175,7 @@ cdef class State:
     # Global best position and fitness
     cdef int max_iterations
     cdef np.ndarray gbest_position 
-    cdef double gbest_fitness 
+    cdef float gbest_fitness
 
     # Parameters
     cdef int swarmSize
@@ -230,7 +265,26 @@ cdef class State:
         # Update the global best
         self.update_gbest()
         # Update the velocities
-        self.update_all_velocities()
+
+        print("GOT TO HERE")
+        #self.update_all_velocities()
+        print(type(self.velocities_view))
+        print(type(self.positions_view))
+        print(type(self.pbest_fitnesses_view))
+        print(type(self.pbest_fitness_positions_view))
+        print(type(self.gbest_position))
+        print(type(self.w))
+        print(type(self.c1))
+        print(type(self.c2))
+        print(type(self.swarmSize))
+        print(type(self.dimensions))
+        print(type(self.topology))
+        print(type(self.max_velocity))
+
+        _update_velocity(velocity=self.velocities_view, positions=self.positions_view, pbest_fitnesses=self.pbest_fitnesses_view,
+                         pbest_fitness_positions=self.pbest_fitness_positions_view, gbest_position=self.gbest_position,
+                         w=self.w, c1=self.c1, c2=self.c2, swarm_size=self.swarmSize, dimensions=self.dimensions,
+                         topology=self.topology, max_velocity=self.max_velocity)
 
         self.current_iteration += 1
 
@@ -291,14 +345,14 @@ cdef class State:
                 # Set the velocity
                 self.velocities[i, j] = random_velocity
 
-    cdef double calculate_fitness(self, int particle_index):
+    cdef float calculate_fitness(self, int particle_index):
         cdef np.ndarray position = self.positions[particle_index]
         assert len(position) == self.dimensions, "Argument 'position' must have the same length as the number of dimensions."
-        cdef double fitness = self.objective_function(*position)
+        cdef float fitness = self.objective_function(*position)
         return fitness
 
-    cdef double calculate_fitness_and_update(self, int particle_index):
-        cdef double fitness = self.calculate_fitness(particle_index)
+    cdef float calculate_fitness_and_update(self, int particle_index):
+        cdef float fitness = self.calculate_fitness(particle_index)
         # Update the pbest fitness if the new fitness is better
         if fitness < self.pbest_fitnesses[particle_index]:
             self.pbest_fitnesses[particle_index] = fitness
@@ -325,7 +379,7 @@ cdef class State:
 
     cdef void update_veocity(self, int particle_index):
         cdef int i
-        cdef double r1, r2, cognitive_component, social_component
+        cdef float r1, r2, cognitive_component, social_component
         cdef np.ndarray velocity = self.velocities[particle_index].copy()
         cdef np.ndarray position = self.positions[particle_index].copy()
         cdef np.ndarray pbest = self.pbest_fitness_positions[particle_index].copy()
@@ -381,8 +435,9 @@ cdef class State:
         cdef bint updated = False
         cdef float gbest, gbest_x, gbest_y
 
-        updated, gbest, gbest_x, gbest_y = _update_gbest(pbest_fitnesses=self.pbest_fitnesses_view, positions=self.positions_view, gbest_fitness=self.gbest_fitness,
-                      swarm_size=self.swarmSize)
+        updated, gbest, gbest_x, gbest_y = _update_gbest(pbest_fitnesses=self.pbest_fitnesses_view,
+                                                         positions=self.positions_view, gbest_fitness=self.gbest_fitness,
+                                                         swarm_size=self.swarmSize)
         if updated:
             self.gbest_fitness = gbest
             self.gbest_position[0] = gbest_x
