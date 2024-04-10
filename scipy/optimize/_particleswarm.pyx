@@ -133,15 +133,14 @@ cdef float _cap_velocity(float vel, float max_velocity):
     else:
         return vel
 
-cdef void _update_velocity(float [:, :] velocity, float [:, :] positions, float [:, :] pbest_fitness_positions, float [:] pbest_fitnesses,
+cdef void _update_velocity(float[:, :] velocity, float [:, :] positions, float [:, :] pbest_fitness_positions, float [:] pbest_fitnesses,
                            float [:] gbest_position, float w, float c1, float c2, int dimensions, int swarm_size, object topology,
-                           float max_velocity):
-    print("WE NOW INSIDE THE VELOCITY UPDATE FUNCTION")
+                           float max_velocity, State pso):
     cdef int partIndex, best_neighbor, j
     cdef float r1, r2
     for partIndex in range(swarm_size):
         # Find the neighbours in the topology
-        neighbours = topology(partIndex)
+        neighbours = topology(pso, partIndex)
         best_neighbor = _find_best_neighbour(pbest_fitnesses, neighbours)
 
         for j in range(dimensions):
@@ -201,13 +200,13 @@ cdef class State:
 
     def __cinit__(self, object objective_function, int swarm_size, int max_iterations, float w, float c1, float c2, int dimensions, np.ndarray bounds = None, object topology = gbest, int seed = -1, int niter_success = -1, float max_velocity = -1.0):
         #TODO: Look into using memoryviews for the arrays --> https://cython.readthedocs.io/en/latest/src/userguide/memoryviews.html
-        self.velocities = np.zeros((swarm_size, dimensions), dtype=np.float32)
-        self.positions = np.zeros((swarm_size, dimensions), dtype=np.float32)
+        self.velocities = np.zeros((swarm_size, dimensions), dtype='f')
+        self.positions = np.zeros((swarm_size, dimensions), dtype='f')
 
         self.bounds = bounds
 
-        self.pbest_fitnesses = np.zeros(swarm_size, dtype=np.float32)
-        self.pbest_fitness_positions = np.zeros((swarm_size, dimensions), dtype=np.float32)
+        self.pbest_fitnesses = np.zeros(swarm_size, dtype='f')
+        self.pbest_fitness_positions = np.zeros((swarm_size, dimensions), dtype='f')
 
         self.velocities_view = self.velocities
         self.positions_view = self.positions
@@ -215,7 +214,7 @@ cdef class State:
         self.pbest_fitness_positions_view = self.pbest_fitness_positions
 
         self.max_iterations = max_iterations
-        self.gbest_position = np.zeros(dimensions)
+        self.gbest_position = np.zeros(dimensions, dtype='f')
         self.gbest_fitness = np.inf 
 
         self.swarmSize = swarm_size
@@ -266,25 +265,11 @@ cdef class State:
         self.update_gbest()
         # Update the velocities
 
-        print("GOT TO HERE")
         #self.update_all_velocities()
-        print(type(self.velocities_view))
-        print(type(self.positions_view))
-        print(type(self.pbest_fitnesses_view))
-        print(type(self.pbest_fitness_positions_view))
-        print(type(self.gbest_position))
-        print(type(self.w))
-        print(type(self.c1))
-        print(type(self.c2))
-        print(type(self.swarmSize))
-        print(type(self.dimensions))
-        print(type(self.topology))
-        print(type(self.max_velocity))
-
         _update_velocity(velocity=self.velocities_view, positions=self.positions_view, pbest_fitnesses=self.pbest_fitnesses_view,
                          pbest_fitness_positions=self.pbest_fitness_positions_view, gbest_position=self.gbest_position,
                          w=self.w, c1=self.c1, c2=self.c2, swarm_size=self.swarmSize, dimensions=self.dimensions,
-                         topology=self.topology, max_velocity=self.max_velocity)
+                         topology=self.topology, max_velocity=self.max_velocity, pso=self)
 
         self.current_iteration += 1
 
@@ -325,7 +310,7 @@ cdef class State:
         if self.bounds is None:
             # If no bounds are given, assume the bounds are (-1, 1) for each dimension
             # TODO: This is not a good way of doing this, as this will eventually constrict the search space even if the user doesn't want it to be
-            self.bounds = np.array([(-1, 1)] * self.dimensions)
+            self.bounds = np.array([(-1, 1)] * self.dimensions, dtype='f')
 
         for i in range(self.swarmSize):
             for j in range(self.dimensions):
