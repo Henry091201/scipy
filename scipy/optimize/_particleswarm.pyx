@@ -3,6 +3,7 @@ from libcpp cimport bool
 from libc.math cimport exp, sqrt, cos, pi
 from libc.stdlib cimport malloc, free
 
+import sys
 import numpy as np
 
 np.import_array()
@@ -78,16 +79,16 @@ cpdef np.ndarray gbest(State pso, int particleIndex):
 
 cdef tuple _update_gbest(float [:] pbest_fitnesses, float[:,:] positions, float gbest_fitness, int swarm_size):
     cdef float gbest = gbest_fitness
-    cdef float gbest_x, gbest_y
+    cdef float[:] gbest_position = None
     cdef bint updated = False
     cdef int i
     for i in range(swarm_size):
         if pbest_fitnesses[i] < gbest:
             gbest = pbest_fitnesses[i]
-            gbest_x, gbest_y = positions[i]
+            gbest_position = positions[i, :]
             updated = True
 
-    return updated, gbest, gbest_x, gbest_y
+    return updated, gbest, gbest_position
 
 cdef void _update_position(float [:, :] position, float [:, :] velocity, int swarm_size):
     cdef int i, j
@@ -98,7 +99,7 @@ cdef void _update_position(float [:, :] position, float [:, :] velocity, int swa
 cdef float _calculate_fitness(float [:, :] positions, int particleIndex, object objective_function, int dimensions):
     cdef float fitness = 0.0
     cdef int i
-    fitness = objective_function(positions[particleIndex, 0], positions[particleIndex, 1])
+    fitness = objective_function(*positions[particleIndex, :])
     return fitness
 
 cdef void _update_fitness(float fitness, float [:] pbest_fitnesses, float [:, :] pbest_fitness_positions, int particleIndex,
@@ -418,15 +419,15 @@ cdef class State:
 
     cdef void update_gbest(self):
         cdef bint updated = False
-        cdef float gbest, gbest_x, gbest_y
+        cdef float gbest 
+        cdef float[:] gbest_position
 
-        updated, gbest, gbest_x, gbest_y = _update_gbest(pbest_fitnesses=self.pbest_fitnesses_view,
+        updated, gbest, gbest_position = _update_gbest(pbest_fitnesses=self.pbest_fitnesses_view,
                                                          positions=self.positions_view, gbest_fitness=self.gbest_fitness,
                                                          swarm_size=self.swarmSize)
         if updated:
             self.gbest_fitness = gbest
-            self.gbest_position[0] = gbest_x
-            self.gbest_position[1] = gbest_y
+            self.gbest_position = np.array(gbest_position, dtype='f')
             self.niter_at_gbest = 0
         else:
             # If no particle has a better fitness than the global best, increment the counter
