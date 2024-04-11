@@ -12,10 +12,14 @@ from scipy.optimize import OptimizeResult
 
 __all__ = ['particleswarm']
 
-cpdef float rastrigin(x, y):
+cpdef float rastrigin(int x, int y):
     # Rastrigin function for demonstration purposes
     cdef float rast = 20 + x ** 2 + y ** 2 - 10 * (cos(2 * pi * x) + cos(2 * pi * y))
     return rast
+
+cpdef float rast(np.ndarray x):
+    cdef float func =  np.sum(x*x - 10*np.cos(2*np.pi*x)) + 10*np.size(x)
+    return func
 
 cpdef float ackley_function_2d(x, y):
     """
@@ -99,7 +103,7 @@ cdef void _update_position(float [:, :] position, float [:, :] velocity, int swa
 cdef float _calculate_fitness(float [:, :] positions, int particleIndex, object objective_function, int dimensions):
     cdef float fitness = 0.0
     cdef int i
-    fitness = objective_function(*positions[particleIndex, :])
+    fitness = objective_function(np.array(positions[particleIndex, :]))
     return fitness
 
 cdef void _update_fitness(float fitness, float [:] pbest_fitnesses, float [:, :] pbest_fitness_positions, int particleIndex,
@@ -360,7 +364,7 @@ cdef class State:
     cdef void initialise_fitnesses(self):
         cdef int i
         for i in range(self.swarmSize):
-            self.pbest_fitnesses[i] = self.calculate_fitness(i)
+            self.pbest_fitnesses[i] = _calculate_fitness(self.positions, i, self.objective_function, self.dimensions)
             self.pbest_fitness_positions[i] = self.positions[i].copy()
 
     cdef void update_veocity(self, int particle_index):
