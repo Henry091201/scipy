@@ -254,7 +254,7 @@ cdef class State:
 
 
     cdef void setup(self):
-        self.initialise_positions()
+        self.initialise_positions(positions=self.positions_view, swarm_size=self.swarmSize, dimensions=self.dimensions)
         # Initialise fitnesses
         self.initialise_fitnesses()
         # Update the global best
@@ -320,21 +320,21 @@ cdef class State:
         return result
         
 
-    cdef void initialise_positions(self):
+    cdef void initialise_positions(self, float[:,: ] positions, int swarm_size, int dimensions):
         cdef int i
         cdef int j
+        cdef np.ndarray random_positions = np.random.uniform(-1, 1, (swarm_size, dimensions))
+
 
         if self.bounds is None:
-            # If no bounds are given, assume the bounds are (-1, 1) for each dimension
+            # If no bounds are given, assume the bounds are (-5.12, 5.12) for each dimension
             # TODO: This is not a good way of doing this, as this will eventually constrict the search space even if the user doesn't want it to be
-            self.bounds = np.array([(-1, 1)] * self.dimensions, dtype='f')
+            self.bounds = np.array([(-5.12, 5.12)] * self.dimensions, dtype='f')
 
         for i in range(self.swarmSize):
             for j in range(self.dimensions):
-                # Choose a random position within the bounds for that dimension
-                random_position = np.random.uniform(self.bounds[j][0], self.bounds[j][1])
                 # Set the position
-                self.positions[i, j] = random_position
+                positions[i, j] = random_positions[i,j]
 
     cdef void initialise_velocities(self):
         cdef int i
@@ -346,12 +346,6 @@ cdef class State:
                 random_velocity = np.random.uniform(-1, 1)
                 # Set the velocity
                 self.velocities[i, j] = random_velocity
-
-    cdef float calculate_fitness(self, int particle_index):
-        cdef np.ndarray position = self.positions[particle_index]
-        assert len(position) == self.dimensions, "Argument 'position' must have the same length as the number of dimensions."
-        cdef float fitness = self.objective_function(*position)
-        return fitness
 
     cdef float calculate_fitness_and_update(self, int particle_index):
         cdef float fitness = self.calculate_fitness(particle_index)
@@ -379,35 +373,6 @@ cdef class State:
             self.pbest_fitnesses[i] = _calculate_fitness(self.positions, i, self.objective_function, self.dimensions)
             self.pbest_fitness_positions[i] = self.positions[i].copy()
 
-    cdef void update_veocity(self, int particle_index):
-        cdef int i
-        cdef float r1, r2, cognitive_component, social_component
-        cdef np.ndarray velocity = self.velocities[particle_index].copy()
-        cdef np.ndarray position = self.positions[particle_index].copy()
-        cdef np.ndarray pbest = self.pbest_fitness_positions[particle_index].copy()
-
-        # Find the particles neighbors that it can share information with
-        neighbors = self.topology(self, particle_index)
-
-        best_neighbor = neighbors[0]
-        # Find the best neighbor
-        for index in neighbors:
-            if self.pbest_fitnesses[index] < self.pbest_fitnesses[best_neighbor]:
-                best_neighbor = index
-
-        for i in range(self.dimensions):
-            r1 = np.random.uniform(0, 1)
-            r2 = np.random.uniform(0, 1)
-
-            cognitive_component = self.c1 * r1 * (pbest[i] - position[i])
-            social_component = self.c2 * r2 * (self.pbest_fitness_positions[best_neighbor][i] - position[i])
-            velocity_calculation = self.w * velocity[i] + cognitive_component + social_component
-
-            # If the max velocity is set, cap the velocity
-            if self.max_velocity > 0:
-                velocity_calculation = self.cap_velocity(velocity_calculation, self.max_velocity)
-
-            self.velocities[particle_index][i] = velocity_calculation
 
     cdef float cap_velocity(self, float vel, float max_velocity):
         if vel > max_velocity:
@@ -419,14 +384,6 @@ cdef class State:
         cdef int i
         for i in range(self.swarmSize):
             self.update_veocity(i)
-
-    cdef void update_position(self, int particle_index):
-        cdef int i
-        cdef np.ndarray position = self.positions[particle_index]
-        cdef np.ndarray velocity = self.velocities[particle_index]
-        for i in range(self.dimensions):
-            position[i] = position[i] + velocity[i]
-            # The bounds are dealt with in the fitness function, so we don't need to worry about them here
 
     cdef void update_all_positions(self):
         cdef int i
@@ -448,8 +405,6 @@ cdef class State:
         else:
             # If no particle has a better fitness than the global best, increment the counter
             self.niter_at_gbest += 1
-
-            
 
     cpdef int get_swarm_size(self):
         return self.swarmSize
