@@ -126,15 +126,16 @@ cdef float _calculate_and_update_fitness(float [:, :] positions, float [:] pbest
     return fitness
 
 cdef int _find_best_neighbour(float [:] pbest_fitnesses, np.ndarray neighbours):
-    cdef int best_neighbour = neighbours[0]
+    cdef int[:] neighbours_view = neighbours
+    cdef int best_neighbour = neighbours_view[0]
     cdef int i
-    for i in range(len(neighbours)):
-        if pbest_fitnesses[neighbours[i]] < pbest_fitnesses[best_neighbour]:
-            best_neighbour = neighbours[i]
+    for i in range(neighbours_view.shape[0]):
+        if pbest_fitnesses[neighbours_view[i]] < pbest_fitnesses[best_neighbour]:
+            best_neighbour = neighbours_view[i]
 
     return best_neighbour
 
-cdef float _cap_velocity(float vel, float max_velocity):
+cdef float _cap_velocity(float vel, float max_velocity) nogil:
     if vel > max_velocity:
         return max_velocity
     else:
