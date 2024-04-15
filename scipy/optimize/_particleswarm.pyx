@@ -3,6 +3,7 @@ from libcpp cimport bool
 from libc.math cimport exp, sqrt, cos, pi
 from libc.stdlib cimport malloc, free
 
+from cython.parallel import prange
 import sys
 import numpy as np
 
@@ -96,6 +97,7 @@ cdef tuple _update_gbest(float [:] pbest_fitnesses, float[:,:] positions, float 
 
 cdef void _update_position(float [:, :] position, float [:, :] velocity, int swarm_size):
     cdef int i, j
+
     for i in range(swarm_size):
         for j in range(position.shape[1]):
             position[i, j] += velocity[i, j]
@@ -142,18 +144,27 @@ cdef void _update_velocity(float[:, :] velocity, float [:, :] positions, float [
                            float [:] gbest_position, float w, float c1, float c2, int dimensions, int swarm_size, object topology,
                            float max_velocity, State pso):
     cdef int partIndex, best_neighbor, j
-    cdef float r1, r2
+    cdef float cognitive_component, social_component, velocity_calculation
+    cdef np.ndarray neighbours
+    cdef np.ndarray best_neighbours = np.empty(swarm_size, dtype=np.int32)
+    cdef int[:] best_neighbours_view = best_neighbours
+    cdef np.ndarray r1 = np.random.uniform(0, 1, (swarm_size, dimensions))
+    cdef np.ndarray r2 = np.random.uniform(0, 1, (swarm_size, dimensions))
+    cdef double[:,:] r1_view = r1
+    cdef double[:,:] r2_view = r2
+
+    # Find the best neighbour for each particle
     for partIndex in range(swarm_size):
-        # Find the neighbours in the topology
         neighbours = topology(pso, partIndex)
-        best_neighbor = _find_best_neighbour(pbest_fitnesses, neighbours)
+        best_neighbours_view[partIndex] = _find_best_neighbour(pbest_fitnesses, neighbours)
+
+    # Update the velocity in parallel
+    for partIndex in range(swarm_size):
+        best_neighbor = best_neighbours_view[partIndex]
 
         for j in range(dimensions):
-            r1 = np.random.uniform(0, 1)
-            r2 = np.random.uniform(0, 1)
-
-            cognitive_component = c1 * r1 * (pbest_fitness_positions[partIndex][j] - positions[partIndex][j])
-            social_component = c2 * r2 * (pbest_fitness_positions[best_neighbor][j] - positions[partIndex][j])
+            cognitive_component = c1 * r1_view[partIndex][j] * (pbest_fitness_positions[partIndex][j] - positions[partIndex][j])
+            social_component = c2 * r2_view[partIndex][j] * (pbest_fitness_positions[best_neighbor][j] - positions[partIndex][j])
             velocity_calculation = w * velocity[partIndex][j] + cognitive_component + social_component
 
             # If the max velocity is set, cap the velocity

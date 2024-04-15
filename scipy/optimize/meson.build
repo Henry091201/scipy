@@ -1,3 +1,4 @@
+openmp_dep = dependency('openmp')
 py3.extension_module('_direct',
   ['_direct/direct_wrap.c',
    '_direct/direct-internal.h',
@@ -229,10 +230,10 @@ _particleswarm_c = opt_gen.process('_particleswarm.pyx')
 py3.extension_module('_particleswarm',
   _particleswarm_c,
   c_args: cython_c_args,
-  dependencies: np_dep,
-  link_args: version_link_args,
+  dependencies: [np_dep, openmp_dep],
+  link_args: [version_link_args, '-fopenmp'],
   install: true,
-  subdir: 'scipy/optimize'
+  subdir: 'scipy/optimize',
 )
 
 subdir('_lsq')
