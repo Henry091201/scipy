@@ -209,7 +209,7 @@ cdef class State:
 
     cdef object package_result
 
-    cdef char* message
+    cdef str message
     cdef int niter_success
     cdef int niter_at_gbest
 
@@ -217,6 +217,8 @@ cdef class State:
 
     def __cinit__(self, object objective_function, int swarm_size, int max_iterations, float w, float c1, float c2, int dimensions, np.ndarray bounds = None, object topology = gbest, int seed = -1, int niter_success = -1, float max_velocity = -1.0):
         #TODO: Look into using memoryviews for the arrays --> https://cython.readthedocs.io/en/latest/src/userguide/memoryviews.html
+
+        self.validate_inputs(objective_function=objective_function, swarm_size=swarm_size, max_iterations=max_iterations, w=w, c1=c1, c2=c2, dimensions=dimensions, bounds=bounds, topology=topology, seed=seed, niter_success=niter_success, max_velocity=max_velocity)
         self.velocities = np.zeros((swarm_size, dimensions), dtype='f')
         self.positions = np.zeros((swarm_size, dimensions), dtype='f')
 
@@ -299,8 +301,6 @@ cdef class State:
             try:
                 next(self)
             except StopIteration:
-                #print("Finished")
-                #self.print_class_variables()
                 break
         
         return self.package_result(self.message)
@@ -315,9 +315,27 @@ cdef class State:
         success = True,
         message = message
         )
-        #print(f"Finished writing the results")
-        #print(result.keys())
         return result
+
+    def validate_inputs(self, object objective_function, int swarm_size, int max_iterations, float w, float c1, float c2, int dimensions, np.ndarray bounds, object topology, int seed, int niter_success, float max_velocity):
+        if not callable(objective_function):
+            raise ValueError("Objective function must be callable.")
+        if w < 0:
+            raise ValueError("Inertia weight must be greater than 0.")
+        if c1 < 0 or c2 < 0:
+            raise ValueError("Cognitive and social components must be greater than 0.")
+        if dimensions <= 0:
+            raise ValueError("Number of dimensions must be greater than 0.")
+        if swarm_size < 1:
+            raise ValueError("Swarm size must be greater than 0.")
+        if max_iterations < 1:
+            raise ValueError("Maximum number of iterations must be greater than 0.")
+        if niter_success < 1 and niter_success != -1:
+            raise ValueError("Number of iterations at global best must be greater than 1.")
+        if max_velocity <= 0 and max_velocity != -1.0:
+            raise ValueError("Maximum velocity must be greater than 0.")
+        if not callable(topology):
+            raise ValueError("Topology must be callable.")
         
 
     cdef void initialise_positions(self):
