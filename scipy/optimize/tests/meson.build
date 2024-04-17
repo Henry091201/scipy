@@ -5,6 +5,7 @@ py3.install_sources([
     'test__dual_annealing.py',
     'test__linprog_clean_inputs.py',
     'test__numdiff.py',
+    'test__particleswarm.py',
     'test__remove_redundancy.py',
     'test__root.py',
     'test__shgo.py',
