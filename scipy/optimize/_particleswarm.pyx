@@ -7,6 +7,7 @@ from cython.parallel import prange
 import sys
 import numpy as np
 
+
 np.import_array()
 
 from scipy.optimize import OptimizeResult
@@ -18,9 +19,25 @@ cpdef float rastrigin(int x, int y):
     cdef float rast = 20 + x ** 2 + y ** 2 - 10 * (cos(2 * pi * x) + cos(2 * pi * y))
     return rast
 
-cpdef float rast(np.ndarray x):
-    cdef float func =  np.sum(x*x - 10*np.cos(2*np.pi*x)) + 10*np.size(x)
-    return func
+def rosen(x):
+    """The Rosenbrock function"""
+    return np.sum(100.0 * (x[1:] - x[:-1] ** 2.0) ** 2.0 + (1 - x[:-1]) ** 2.0)
+
+def sphere(x):
+    """The Sphere function"""
+    return np.sum(x ** 2.0)
+
+def greiwank(x):
+    """The Greiwank function"""
+    d = x.shape[0]
+    j = 1 + (1 / 4000) * np.sum(x ** 2.0) - np.prod(np.cos(x / np.sqrt(np.arange(1, d + 1))))
+    return j
+
+
+def rast(x):
+    # Rastrigin function for demonstration purposes
+    rast = 20 + x[0] ** 2 + x[1] ** 2 - 10 * (cos(2 * pi * x[0]) + cos(2 * pi * x[1]))
+    return rast
 
 cpdef float ackley_function_2d(x, y):
     """
@@ -95,12 +112,15 @@ cdef tuple _update_gbest(float [:] pbest_fitnesses, float[:,:] positions, float 
 
     return updated, gbest, gbest_position
 
-cdef void _update_position(float [:, :] position, float [:, :] velocity, int swarm_size):
+cdef void _update_position(position, velocity, int swarm_size):
     cdef int i, j
 
+    position += velocity
+    """
     for i in range(swarm_size):
         for j in range(position.shape[1]):
             position[i, j] += velocity[i, j]
+            """
 
 cdef float _calculate_fitness(float [:, :] positions, int particleIndex, object objective_function, int dimensions):
     cdef float fitness = 0.0
@@ -154,13 +174,11 @@ cdef void _update_velocity(float[:, :] velocity, float [:, :] positions, float [
     cdef double[:,:] r1_view = r1
     cdef double[:,:] r2_view = r2
 
-    # Find the best neighbour for each particle
-    for partIndex in range(swarm_size):
-        neighbours = topology(pso, partIndex)
-        best_neighbours_view[partIndex] = _find_best_neighbour(pbest_fitnesses, neighbours)
 
     # Update the velocity in parallel
     for partIndex in range(swarm_size):
+        neighbours = topology(pso, partIndex)
+        best_neighbours_view[partIndex] = _find_best_neighbour(pbest_fitnesses, neighbours)
         best_neighbor = best_neighbours_view[partIndex]
 
         for j in range(dimensions):
@@ -189,7 +207,7 @@ cdef class State:
     cdef float [:, :] pbest_fitness_positions_view
 
     # Global best position and fitness
-    cdef int max_iterations
+    cdef int max_iter
     cdef np.ndarray gbest_position 
     cdef float gbest_fitness
 
@@ -215,10 +233,10 @@ cdef class State:
 
     cdef float max_velocity
 
-    def __cinit__(self, object objective_function, int swarm_size, int max_iterations, float w, float c1, float c2, int dimensions, np.ndarray bounds = None, object topology = gbest, int seed = -1, int niter_success = -1, float max_velocity = -1.0):
+    def __cinit__(self, object objective_function, int swarm_size, int max_iter, float w, float c1, float c2, int dimensions, np.ndarray bounds = None, object topology = gbest, int seed = -1, int niter_success = -1, float max_velocity = -1.0):
         #TODO: Look into using memoryviews for the arrays --> https://cython.readthedocs.io/en/latest/src/userguide/memoryviews.html
 
-        self.validate_inputs(objective_function=objective_function, swarm_size=swarm_size, max_iterations=max_iterations, w=w, c1=c1, c2=c2, dimensions=dimensions, bounds=bounds, topology=topology, seed=seed, niter_success=niter_success, max_velocity=max_velocity)
+        self.validate_inputs(objective_function=objective_function, swarm_size=swarm_size, max_iterations=max_iter, w=w, c1=c1, c2=c2, dimensions=dimensions, bounds=bounds, topology=topology, seed=seed, niter_success=niter_success, max_velocity=max_velocity)
         self.velocities = np.zeros((swarm_size, dimensions), dtype='f')
         self.positions = np.zeros((swarm_size, dimensions), dtype='f')
 
@@ -232,7 +250,7 @@ cdef class State:
         self.pbest_fitnesses_view = self.pbest_fitnesses
         self.pbest_fitness_positions_view = self.pbest_fitness_positions
 
-        self.max_iterations = max_iterations
+        self.max_iter = max_iter
         self.gbest_position = np.zeros(dimensions, dtype='f')
         self.gbest_fitness = np.inf 
 
@@ -267,7 +285,7 @@ cdef class State:
         #print(self.print_class_variables())
 
     def __next__(self):
-        if self.current_iteration >= self.max_iterations:
+        if self.current_iteration >= self.max_iter:
             self.message = "Maximum number of iterations reached"
             raise StopIteration
 
@@ -276,7 +294,7 @@ cdef class State:
             raise StopIteration
         # Do a single interation
         # Update the positions
-        _update_position(self.positions_view, self.velocities_view, self.swarmSize)
+        _update_position(self.positions, self.velocities, self.swarmSize)
         # self.update_all_positions()
         # Update the fitnesses
         self.calculate_all_fitnesses()
@@ -297,7 +315,7 @@ cdef class State:
 
     cdef solve(self):
         cdef int i
-        for i in range(self.max_iterations + 1):
+        for i in range(self.max_iter + 1):
             try:
                 next(self)
             except StopIteration:
@@ -472,10 +490,10 @@ cdef class State:
     cpdef int get_swarm_size(self):
         return self.swarmSize
 
-cpdef particleswarm(object objective_function, int swarm_size, int max_iterations, float w, float c1, float c2,
+cpdef particleswarm(object objective_function, int swarm_size, int max_iter, float w, float c1, float c2,
                      int dimensions, np.ndarray bounds=None, object topology = gbest, int seed = -1, int niter_success = -1,
                     max_velocity = -1):
-    pso = State(objective_function, swarm_size, max_iterations, w, c1, c2, dimensions, bounds, topology, seed, niter_success,
+    pso = State(objective_function, swarm_size, max_iter, w, c1, c2, dimensions, bounds, topology, seed, niter_success,
                 max_velocity)
     pso.setup()
     return pso.solve()
