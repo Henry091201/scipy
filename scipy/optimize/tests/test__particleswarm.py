@@ -31,6 +31,18 @@ def test_array_dimensions():
     assert state_class.get_pbest_fitnesses().shape == (50,)
     assert state_class.get_pbest_fitness_positions().shape == (50, 2)
 
+def test_velocity_initialisation():
+    # Test the initialisation of the velocities
+
+    bounds = np.array([[-10, 10], [-10, 10]])
+    state_class = TestState(rast, 50, 2, max_iter=1000, w=0.729, c1=1.4, c2=1.4,
+                    bounds=bounds, topology = gbest, seed = -1, niter_success = -1,
+                    max_velocity = -1)
+    
+    state_class.setup_test()
+    # Assert that the velocities are max 30% of search space
+    assert np.all(state_class.get_velocities() >= -3)
+    assert np.all(state_class.get_velocities() <= 3)
 
 class TestParticleSwarm:
     # Test correctness

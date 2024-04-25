@@ -543,6 +543,8 @@ cdef class TestState(State):
         return self.current_iteration
     def get_seed(self):
         return self.seed
+    def setup_test(self):
+        self.setup()
 
 cpdef particleswarm(object objective_function, int swarm_size,int dimensions, int max_iter=1000, float w=0.729, float c1=1.4, float c2=1.4,
                     np.ndarray bounds=None, object topology = gbest, int seed = -1, int niter_success = -1,
