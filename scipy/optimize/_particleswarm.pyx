@@ -233,10 +233,13 @@ cdef class State:
 
     cdef float max_velocity
 
-    def __cinit__(self, object objective_function, int swarm_size, int max_iter, float w, float c1, float c2, int dimensions, np.ndarray bounds = None, object topology = gbest, int seed = -1, int niter_success = -1, float max_velocity = -1.0):
-        #TODO: Look into using memoryviews for the arrays --> https://cython.readthedocs.io/en/latest/src/userguide/memoryviews.html
+    def __cinit__(self, object objective_function, int swarm_size, int dimensions, int max_iter, float w, float c1, float c2, np.ndarray bounds,
+                 object topology, int seed, int niter_success, float max_velocity):
 
-        self.validate_inputs(objective_function=objective_function, swarm_size=swarm_size, max_iterations=max_iter, w=w, c1=c1, c2=c2, dimensions=dimensions, bounds=bounds, topology=topology, seed=seed, niter_success=niter_success, max_velocity=max_velocity)
+        self.validate_inputs(objective_function=objective_function, swarm_size=swarm_size, max_iterations=max_iter, w=w, c1=c1,
+                             c2=c2, dimensions=dimensions, bounds=bounds, topology=topology, seed=seed, niter_success=niter_success, 
+                             max_velocity=max_velocity)
+
         self.velocities = np.zeros((swarm_size, dimensions), dtype='f')
         self.positions = np.zeros((swarm_size, dimensions), dtype='f')
 
@@ -490,10 +493,11 @@ cdef class State:
     cpdef int get_swarm_size(self):
         return self.swarmSize
 
-cpdef particleswarm(object objective_function, int swarm_size, int max_iter, float w, float c1, float c2,
-                     int dimensions, np.ndarray bounds=None, object topology = gbest, int seed = -1, int niter_success = -1,
+cpdef particleswarm(object objective_function, int swarm_size,int dimensions, int max_iter=1000, float w=0.729, float c1=2, float c2=2,
+                    np.ndarray bounds=None, object topology = gbest, int seed = -1, int niter_success = -1,
                     max_velocity = -1):
-    pso = State(objective_function, swarm_size, max_iter, w, c1, c2, dimensions, bounds, topology, seed, niter_success,
+    pso = State(objective_function, swarm_size,dimensions, max_iter, 
+                w, c1, c2, bounds, topology, seed, niter_success,
                 max_velocity)
     pso.setup()
     return pso.solve()
