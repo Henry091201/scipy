@@ -94,9 +94,26 @@ class TestParticleSwarm:
         # Set a particle out of bounds
         state_class.set_particle_position(0, np.array([100, 100]))
         # Recalculate the fitnesses and assert it is set to infinity
-        print(state_class.get_positions()[0])
-        print(state_class.calculate_particle_fitness(0))
         assert state_class.calculate_particle_fitness(0) == float('inf')
+
+    def test_velocity_clamping(self):
+        """
+        Test the velocity clamping
+        """
+        bounds = np.array([[-10, 10], [-10, 10]])
+        state_class = TestState(rast, 50, 2, max_iter=1000, w=1, c1=1.4, c2=1.4,
+                    bounds=bounds, topology = gbest, seed = -1, niter_success = -1,
+                    max_velocity = 3)
+        state_class.setup_test()
+        # Assert all velocities are within bounds
+        assert np.all(state_class.get_velocities() >= -3)
+        assert np.all(state_class.get_velocities() <= 3)
+        # Set a particle velocity very high
+        state_class.set_particle_velocity(0, np.array([100, 100]))
+        assert not np.all(state_class.get_velocities() <= 3)
+        state_class.update_all_velocities()
+        # Assert the velocities are clamped
+        assert np.all(state_class.get_velocities() <= 3)
 
 
     def test_invalid_params(self):

@@ -148,7 +148,6 @@ cdef float _calculate_and_update_fitness(float [:, :] positions, float [:] pbest
                                        object objective_function, int dimensions, np.ndarray bounds):
     cdef float fitness = _calculate_fitness(positions, particle_index, objective_function, dimensions, bounds)
     _update_fitness(fitness, pbest_fitnesses, pbest_fitness_positions, particle_index, positions, dimensions)
-    # TODO: Remember to do the bounds checking
 
     return fitness
 
@@ -162,9 +161,13 @@ cdef int _find_best_neighbour(float [:] pbest_fitnesses, np.ndarray neighbours):
 
     return best_neighbour
 
-cdef float _cap_velocity(float vel, float max_velocity) nogil:
+cdef float _cap_velocity(float vel, float max_velocity):
+    # Cap the velocity if it exceeds the max velocity
+    # Remember the velocity can be negative
     if vel > max_velocity:
         return max_velocity
+    elif vel < -max_velocity:
+        return -max_velocity
     else:
         return vel
 
@@ -524,6 +527,15 @@ cdef class TestState(State):
 
     def calculate_particle_fitness(self, int particle_index):
         return _calculate_fitness(self.positions, particle_index, self.objective_function, self.dimensions, self.bounds)
+
+    def set_particle_velocity(self, int particle_index, np.ndarray velocity):
+        self.velocities[particle_index] = velocity
+
+    def update_all_velocities(self):
+        _update_velocity(velocity=self.velocities_view, positions=self.positions_view, pbest_fitnesses=self.pbest_fitnesses_view,
+                         pbest_fitness_positions=self.pbest_fitness_positions_view, gbest_position=self.gbest_position,
+                         w=self.w, c1=self.c1, c2=self.c2, swarm_size=self.swarm_size, dimensions=self.dimensions,
+                         topology=self.topology, max_velocity=self.max_velocity, pso=self)
 
 cpdef particleswarm(object objective_function, int swarm_size,int dimensions, int max_iter=1000, float w=0.729, float c1=1.4, float c2=1.4,
                     np.ndarray bounds=None, object topology = gbest, int seed = -1, int niter_success = -1,
