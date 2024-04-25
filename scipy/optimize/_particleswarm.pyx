@@ -122,10 +122,17 @@ cdef void _update_position(position, velocity, int swarm_size):
             position[i, j] += velocity[i, j]
             """
 
-cdef float _calculate_fitness(float [:, :] positions, int particle_index, object objective_function, int dimensions):
+cdef float _calculate_fitness(float [:, :] positions, int particle_index, object objective_function, int dimensions, np.ndarray bounds):
     cdef float fitness = 0.0
     cdef int i
+    # If the particle is outside the bounds, set the fitness to infinity
+    
     fitness = objective_function(np.array(positions[particle_index, :]))
+
+    if bounds is not None:
+        for i in range(dimensions):
+            if positions[particle_index][i] < bounds[i][0] or positions[particle_index][i] > bounds[i][1]:
+                return float('inf')
     return fitness
 
 cdef void _update_fitness(float fitness, float [:] pbest_fitnesses, float [:, :] pbest_fitness_positions, int particle_index,
@@ -138,8 +145,8 @@ cdef void _update_fitness(float fitness, float [:] pbest_fitnesses, float [:, :]
             pbest_fitness_positions[particle_index, i] = positions[particle_index, i]
 
 cdef float _calculate_and_update_fitness(float [:, :] positions, float [:] pbest_fitnesses, float [:, :] pbest_fitness_positions, int particle_index,
-                                       object objective_function, int dimensions):
-    cdef float fitness = _calculate_fitness(positions, particle_index, objective_function, dimensions)
+                                       object objective_function, int dimensions, np.ndarray bounds):
+    cdef float fitness = _calculate_fitness(positions, particle_index, objective_function, dimensions, bounds)
     _update_fitness(fitness, pbest_fitnesses, pbest_fitness_positions, particle_index, positions, dimensions)
     # TODO: Remember to do the bounds checking
 
@@ -421,54 +428,19 @@ cdef class State:
         for i in range(self.swarm_size):
             _calculate_and_update_fitness(positions=self.positions_view, pbest_fitness_positions=self.pbest_fitness_positions_view,
                                           pbest_fitnesses=self.pbest_fitnesses_view, particle_index=i, objective_function=self.objective_function,
-                                          dimensions=self.dimensions)
+                                          dimensions=self.dimensions, bounds=self.bounds)
 
     cdef void initialise_fitnesses(self):
         cdef int i
         for i in range(self.swarm_size):
-            self.pbest_fitnesses[i] = _calculate_fitness(self.positions, i, self.objective_function, self.dimensions)
+            self.pbest_fitnesses[i] = _calculate_fitness(self.positions, i, self.objective_function, self.dimensions, self.bounds)
             self.pbest_fitness_positions[i] = self.positions[i].copy()
-
-    cdef void update_veocity(self, int particle_index):
-        cdef int i
-        cdef float r1, r2, cognitive_component, social_component
-        cdef np.ndarray velocity = self.velocities[particle_index].copy()
-        cdef np.ndarray position = self.positions[particle_index].copy()
-        cdef np.ndarray pbest = self.pbest_fitness_positions[particle_index].copy()
-
-        # Find the particles neighbors that it can share information with
-        neighbors = self.topology(self, particle_index)
-
-        best_neighbor = neighbors[0]
-        # Find the best neighbor
-        for index in neighbors:
-            if self.pbest_fitnesses[index] < self.pbest_fitnesses[best_neighbor]:
-                best_neighbor = index
-
-        for i in range(self.dimensions):
-            r1 = np.random.uniform(0, 1)
-            r2 = np.random.uniform(0, 1)
-
-            cognitive_component = self.c1 * r1 * (pbest[i] - position[i])
-            social_component = self.c2 * r2 * (self.pbest_fitness_positions[best_neighbor][i] - position[i])
-            velocity_calculation = self.w * velocity[i] + cognitive_component + social_component
-
-            # If the max velocity is set, cap the velocity
-            if self.max_velocity > 0:
-                velocity_calculation = self.cap_velocity(velocity_calculation, self.max_velocity)
-
-            self.velocities[particle_index][i] = velocity_calculation
 
     cdef float cap_velocity(self, float vel, float max_velocity):
         if vel > max_velocity:
             return max_velocity
         else:
             return vel
-
-    cdef void update_all_velocities(self):
-        cdef int i
-        for i in range(self.swarm_size):
-            self.update_veocity(i)
 
     cdef void update_position(self, int particle_index):
         cdef int i
@@ -543,6 +515,15 @@ cdef class TestState(State):
         return self.seed
     def setup_test(self):
         self.setup()
+
+    def set_particle_position(self, int particle_index, np.ndarray position):
+        self.positions[particle_index] = position
+
+    def calculate_all_fitnesses(self) :
+        return super().calculate_all_fitnesses()
+
+    def calculate_particle_fitness(self, int particle_index):
+        return _calculate_fitness(self.positions, particle_index, self.objective_function, self.dimensions, self.bounds)
 
 cpdef particleswarm(object objective_function, int swarm_size,int dimensions, int max_iter=1000, float w=0.729, float c1=1.4, float c2=1.4,
                     np.ndarray bounds=None, object topology = gbest, int seed = -1, int niter_success = -1,

@@ -76,6 +76,29 @@ class TestParticleSwarm:
         assert isinstance(res, OptimizeResult)
         assert np.allclose(res.fun, 0, atol=1e-4)
 
+    def test_out_of_bounds(self):
+        """
+        If the particle goes out of bounds, its fitness should be set to infinity
+        """
+        bounds = np.array([[-10, 10], [-10, 10]])
+        state_class = TestState(rast, 50, 2, max_iter=1000, w=0.729, c1=1.4, c2=1.4,
+                    bounds=bounds, topology = gbest, seed = -1, niter_success = -1,
+                    max_velocity = -1)
+        state_class.setup_test()
+        # Assert all particles are within bounds
+        assert np.all(state_class.get_positions() >= -10)
+        assert np.all(state_class.get_positions() <= 10)
+        # Assert no fitness is set to infinity
+        assert np.all(state_class.get_pbest_fitnesses() != np.inf)
+
+        # Set a particle out of bounds
+        state_class.set_particle_position(0, np.array([100, 100]))
+        # Recalculate the fitnesses and assert it is set to infinity
+        print(state_class.get_positions()[0])
+        print(state_class.calculate_particle_fitness(0))
+        assert state_class.calculate_particle_fitness(0) == float('inf')
+
+
     def test_invalid_params(self):
         # Test the particle swarm optimisation with invalid parameters
         msg = "Swarm size must be greater than 0."
