@@ -6,7 +6,7 @@ import pytest
 import numpy as np
 from scipy.optimize import rosen
 
-from scipy.optimize import particleswarm, OptimizeResult
+from scipy.optimize import particleswarm, OptimizeResult, _initialise_state, TestState, gbest
 # Set the seed for reproducibility
 
 def rast(x):
@@ -20,6 +20,17 @@ def test_particle_swarm_invalid_params():
     # Test the particle swarm optimisation with invalid parameters
     with pytest.raises(ValueError):
         particleswarm(quadratic, -50, 2)
+
+def test_array_dimensions():
+    # Test the particle swarm optimisation with different array dimensions
+    state_class = TestState(rast, 50, 2, max_iter=1000, w=0.729, c1=1.4, c2=1.4,
+                    bounds=None, topology = gbest, seed = -1, niter_success = -1,
+                    max_velocity = -1)
+    assert state_class.get_velocities().shape == (50, 2)
+    assert state_class.get_positions().shape == (50, 2)
+    assert state_class.get_pbest_fitnesses().shape == (50,)
+    assert state_class.get_pbest_fitness_positions().shape == (50, 2)
+
 
 class TestParticleSwarm:
     # Test correctness

@@ -362,27 +362,40 @@ cdef class State:
     cdef void initialise_positions(self):
         cdef int i
         cdef int j
+        cdef np.ndarray local_bounds
 
         if self.bounds is None:
-            # If no bounds are given, assume the bounds are (-1, 1) for each dimension
-            # TODO: This is not a good way of doing this, as this will eventually constrict the search space even if the user doesn't want it to be
-            self.bounds = np.array([(-1, 1)] * self.dimensions, dtype='f')
+            # If the bounds are not set, default to (-5, 5) for each dimension.
+            # This will allow place the particles within the bounds, but allow for exploration
+            # anywhere within the search space
+            local_bounds = np.array([(-5, 5)] * self.dimensions, dtype='f')
+        else:
+            local_bounds = self.bounds
 
         for i in range(self.swarmSize):
             for j in range(self.dimensions):
                 # Choose a random position within the bounds for that dimension
-                random_position = np.random.uniform(self.bounds[j][0], self.bounds[j][1])
+                random_position = np.random.uniform(local_bounds[j][0], local_bounds[j][1])
                 # Set the position
                 self.positions[i, j] = random_position
 
-    cdef void initialise_velocities(self):
+    cpdef void initialise_velocities(self):
         cdef int i
         cdef int j
+        cdef float min_velocity_bound, max_velocity_bound
+
+
 
         for i in range(self.swarmSize):
             for j in range(self.dimensions):
-                # Choose a random velocity between -1 and 1
-                random_velocity = np.random.uniform(-1, 1)
+                # Set the velocity bounds to max 30% of the search space
+                if self.bounds is not None:
+                    min_velocity_bound = 0.3 * (self.bounds[j][0])
+                    max_velocity_bound = 0.3 * (self.bounds[j][1])
+                
+                    random_velocity = np.random.uniform(min_velocity_bound, max_velocity_bound)
+                else:
+                    random_velocity = np.random.uniform(-1, 1)
                 # Set the velocity
                 self.velocities[i, j] = random_velocity
 
@@ -489,11 +502,49 @@ cdef class State:
             self.niter_at_gbest += 1
 
             
-
     cpdef int get_swarm_size(self):
         return self.swarmSize
 
-cpdef particleswarm(object objective_function, int swarm_size,int dimensions, int max_iter=1000, float w=0.729, float c1=2, float c2=2,
+cdef class TestState(State):
+    """
+    This is a class that allows easy the Python unit tests to interface with the Cython attributes
+    """
+    __test__ = False
+
+    def get_velocities(self):
+        return self.velocities 
+    def get_positions(self):
+        return self.positions
+    def get_pbest_fitnesses(self):
+        return self.pbest_fitnesses
+    def get_pbest_fitness_positions(self):
+        return self.pbest_fitness_positions
+    def get_gbest_position(self):
+        return self.gbest_position
+    def get_gbest_fitness(self):
+        return self.gbest_fitness
+    def get_max_iter(self):
+        return self.max_iter
+    def get_swarm_size(self):
+        return self.swarmSize
+    def get_w(self):
+        return self.w
+    def get_c1(self):
+        return self.c1
+    def get_c2(self):
+        return self.c2
+    def get_dimensions(self):
+        return self.dimensions
+    def get_objective_function(self):
+        return self.objective_function
+    def get_topology(self):
+        return self.topology
+    def get_current_iteration(self):
+        return self.current_iteration
+    def get_seed(self):
+        return self.seed
+
+cpdef particleswarm(object objective_function, int swarm_size,int dimensions, int max_iter=1000, float w=0.729, float c1=1.4, float c2=1.4,
                     np.ndarray bounds=None, object topology = gbest, int seed = -1, int niter_success = -1,
                     max_velocity = -1):
     pso = State(objective_function, swarm_size,dimensions, max_iter, 
@@ -501,3 +552,13 @@ cpdef particleswarm(object objective_function, int swarm_size,int dimensions, in
                 max_velocity)
     pso.setup()
     return pso.solve()
+
+def _initialise_state(object objective_function, int swarm_size,int dimensions, int max_iter=1000, float w=0.729, float c1=1.4, float c2=1.4,
+                    np.ndarray bounds=None, object topology = gbest, int seed = -1, int niter_success = -1,
+                    max_velocity = -1):
+    """
+    This returns a State object, this is used for testing.
+    """
+    return State(objective_function, swarm_size,dimensions, max_iter, 
+                w, c1, c2, bounds, topology, seed, niter_success,
+                max_velocity)
