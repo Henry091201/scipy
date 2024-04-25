@@ -59,28 +59,29 @@ class TestParticleSwarm:
         # Test the particle swarm optimisation with invalid parameters
         msg = "Swarm size must be greater than 0."
         with pytest.raises(ValueError, match=msg):
-            particleswarm(quadratic,swarm_size=-50, max_iterations=1000, w=0.8, c1=1, c2=1, dimensions=2)
+            particleswarm(quadratic, -50, 1000, 0.8, 1, 1, 2)
         msg = "Maximum number of iterations must be greater than 0."
         with pytest.raises(ValueError, match=msg):
-            particleswarm(quadratic,swarm_size=50, max_iterations=-1000, w=0.8, c1=1, c2=1, dimensions=2)
+            particleswarm(quadratic,50, -1000, 0.8, 1, 1, 2)
         msg = "Objective function must be callable."
         with pytest.raises(ValueError, match=msg):
-            particleswarm(objective_function="fail",swarm_size=50, max_iterations=1000, w=0.8, c1=1, c2=1, dimensions=2)
+            particleswarm("fail",50, 1000, 0.8, 1, 1, 2)
         msg = "Inertia weight must be greater than 0."
         with pytest.raises(ValueError, match=msg):
-            particleswarm(quadratic,swarm_size=50, max_iterations=1000, w=-0.8, c1=1, c2=1, dimensions=2)
+            particleswarm(quadratic,50, 1000, -0.8, 1, 1, 2)
         msg = "Cognitive and social components must be greater than 0."
         with pytest.raises(ValueError, match=msg):
-            particleswarm(quadratic,swarm_size=50, max_iterations=1000, w=0.8, c1=-1, c2=1, dimensions=2)
+            particleswarm(quadratic,50, 1000, 0.8, -1, 1, 2)
         msg = "Number of dimensions must be greater than 0."
         with pytest.raises(ValueError, match=msg):
-            particleswarm(quadratic,swarm_size=50, max_iterations=1000, w=0.8, c1=1, c2=1, dimensions=-2)
+            particleswarm(quadratic,50, 1000, 0.8, 1, 1, -2)
         msg = 'Topology must be callable.'
         with pytest.raises(ValueError, match=msg):
-            particleswarm(quadratic,swarm_size=50, max_iterations=1000, w=0.8, c1=1, c2=1, dimensions=2, topology="fail")
+            particleswarm(quadratic,50, 1000, 0.8, 1, 1, 2, topology="fail")
         msg = "Maximum velocity must be greater than 0."
         with pytest.raises(ValueError, match=msg):
-            particleswarm(quadratic,swarm_size=50, max_iterations=1000, w=0.8, c1=1, c2=1, dimensions=2, max_velocity=0)
+            particleswarm(quadratic,50, 1000, 0.8, 1, 1, 2, max_velocity = 0)
+       
             
     def test_1d(self):
         # Test the particle swarm optimisation in 1D
