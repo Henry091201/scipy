@@ -187,7 +187,7 @@ cdef void _update_velocity(float[:, :] velocity, float [:, :] positions, float [
 
     # Update the velocity in parallel
     for particle_index in range(swarm_size):
-        neighbours = topology(pso, particle_index)
+        neighbours = get_neighbours(pso, particle_index, topology)
         best_neighbours_view[particle_index] = _find_best_neighbour(pbest_fitnesses, neighbours)
         best_neighbor = best_neighbours_view[particle_index]
 
@@ -201,6 +201,15 @@ cdef void _update_velocity(float[:, :] velocity, float [:, :] positions, float [
                 velocity_calculation = _cap_velocity(velocity_calculation, max_velocity)
 
             velocity[particle_index][j] = velocity_calculation
+
+cdef get_neighbours(State pso, int particle_index, object topology):
+    cdef np.ndarray neighbours = topology(pso, particle_index).astype(np.int32)
+    # if size of neighbours is 0, then raise a value error
+    if neighbours.size == 0:
+        raise ValueError("Topology returned an empty array. Ensure that the topology function is returning a non-empty array.")
+    return neighbours
+
+    
 
 cdef class State:
     cdef np.ndarray velocities
@@ -297,6 +306,22 @@ cdef class State:
         ##print(f"Initialised everything")
         #print(self.print_class_variables())
 
+    cpdef np.ndarray star(self, State pso, int particle_index):
+        # Produces the ring topology for the particles
+
+        return np.arange(self.swarm_size, dtype=np.int32)
+
+    cpdef np.ndarray ring(self, State pso, int particle_index):
+        # Produces the ring topology for the particles
+        cdef np.ndarray neighbours = np.empty(2, dtype=np.int32)
+        neighbours[0] = particle_index - 1
+        neighbours[1] = particle_index + 1
+        if particle_index == 0:
+            neighbours[0] = self.swarm_size - 1
+        if particle_index == self.swarm_size - 1:
+            neighbours[1] = 0
+        return neighbours
+
     def __next__(self):
         if self.current_iteration >= self.max_iter:
             self.message = "Maximum number of iterations reached"
@@ -316,10 +341,7 @@ cdef class State:
         # Update the velocities
 
         #self.update_all_velocities()
-        _update_velocity(velocity=self.velocities_view, positions=self.positions_view, pbest_fitnesses=self.pbest_fitnesses_view,
-                         pbest_fitness_positions=self.pbest_fitness_positions_view, gbest_position=self.gbest_position,
-                         w=self.w, c1=self.c1, c2=self.c2, swarm_size=self.swarm_size, dimensions=self.dimensions,
-                         topology=self.topology, max_velocity=self.max_velocity, pso=self)
+        self.update_velocity()
 
         self.current_iteration += 1
 
@@ -365,9 +387,22 @@ cdef class State:
             raise ValueError("Number of iterations at global best must be greater than 1.")
         if max_velocity <= 0 and max_velocity != -1.0:
             raise ValueError("Maximum velocity must be greater than 0.")
-        if not callable(topology):
-            raise ValueError("Topology must be callable.")
         
+    cdef void update_velocity(self):
+        cdef object topology_local
+        if callable(self.topology):
+            topology_local = self.topology
+        elif self.topology == 'ring':
+            topology_local = self.ring
+        elif self.topology == 'star':
+            topology_local = self.star
+        else:
+            raise ValueError("Invalid topology. Must be callable or one of 'ring' or 'star'.")
+
+        _update_velocity(velocity=self.velocities_view, positions=self.positions_view, pbest_fitnesses=self.pbest_fitnesses_view,
+                         pbest_fitness_positions=self.pbest_fitness_positions_view, gbest_position=self.gbest_position,
+                         w=self.w, c1=self.c1, c2=self.c2, swarm_size=self.swarm_size, dimensions=self.dimensions,
+                         topology=topology_local, max_velocity=self.max_velocity, pso=self)
 
     cdef void initialise_positions(self):
         cdef int i
@@ -538,7 +573,7 @@ cdef class TestState(State):
                          topology=self.topology, max_velocity=self.max_velocity, pso=self)
 
 cpdef particleswarm(object objective_function, int swarm_size,int dimensions, int max_iter=1000, float w=0.729, float c1=1.4, float c2=1.4,
-                    np.ndarray bounds=None, object topology = gbest, int seed = -1, int niter_success = -1,
+                    np.ndarray bounds=None, object topology = 'star', int seed = -1, int niter_success = -1,
                     max_velocity = -1):
     pso = State(objective_function, swarm_size,dimensions, max_iter, 
                 w, c1, c2, bounds, topology, seed, niter_success,

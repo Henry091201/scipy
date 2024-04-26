@@ -15,6 +15,9 @@ def rast(x):
 def quadratic(x):
     return np.sum(x**2)
 
+def mock_topology(pso, particle_index):
+    return np.arange(pso.get_swarm_size())
+
 
 def test_particle_swarm_invalid_params():
     # Test the particle swarm optimisation with invalid parameters
@@ -115,6 +118,11 @@ class TestParticleSwarm:
         # Assert the velocities are clamped
         assert np.all(state_class.get_velocities() <= 3)
 
+    def test_topology(self):
+        particleswarm(rast, 50, 2, topology="ring")
+        particleswarm(rast, 50, 2, topology="star")
+        particleswarm(rast, 50, 2, topology=mock_topology)
+
 
     def test_invalid_params(self):
         # Test the particle swarm optimisation with invalid parameters
@@ -136,7 +144,7 @@ class TestParticleSwarm:
         msg = "Number of dimensions must be greater than 0."
         with pytest.raises(ValueError, match=msg):
             particleswarm(quadratic,50, -1)
-        msg = 'Topology must be callable.'
+        msg = 'Invalid topology. Must be callable or one of \'ring\' or \'star\'.'
         with pytest.raises(ValueError, match=msg):
             particleswarm(quadratic,50, 2, topology="fail")
         msg = "Maximum velocity must be greater than 0."
