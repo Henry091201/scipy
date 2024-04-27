@@ -18,6 +18,11 @@ def quadratic(x):
 def mock_topology(pso, particle_index):
     return np.arange(pso.get_swarm_size())
 
+def mock_dynamic_inertia(pso):
+    iteration = pso.get_current_iteration()
+    max_iter = pso.get_max_iter()
+    return 0.9 - (0.5 / max_iter) * iteration
+    
 
 def test_particle_swarm_invalid_params():
     # Test the particle swarm optimisation with invalid parameters
@@ -33,6 +38,11 @@ def test_array_dimensions():
     assert state_class.get_positions().shape == (50, 2)
     assert state_class.get_pbest_fitnesses().shape == (50,)
     assert state_class.get_pbest_fitness_positions().shape == (50, 2)
+    
+def test_dynamic_inertia():
+    # Test the dynamic inertia
+    bounds = np.array([[-10, 10], [-10, 10]])
+    particleswarm(rast, 50, 2, w=mock_dynamic_inertia)
 
 def test_velocity_initialisation():
     # Test the initialisation of the velocities

@@ -232,7 +232,7 @@ cdef class State:
 
     # Parameters
     cdef int swarm_size
-    cdef float w
+    cdef object w
     cdef float c1
     cdef float c2
     cdef int dimensions
@@ -252,7 +252,7 @@ cdef class State:
 
     cdef float max_velocity
 
-    def __cinit__(self, object objective_function, int swarm_size, int dimensions, int max_iter, float w, float c1, float c2, np.ndarray bounds,
+    def __cinit__(self, object objective_function, int swarm_size, int dimensions, int max_iter, object w, float c1, float c2, np.ndarray bounds,
                  object topology, int seed, int niter_success, float max_velocity):
 
         self.validate_inputs(objective_function=objective_function, swarm_size=swarm_size, max_iterations=max_iter, w=w, c1=c1,
@@ -370,10 +370,10 @@ cdef class State:
         )
         return result
 
-    def validate_inputs(self, object objective_function, int swarm_size, int max_iterations, float w, float c1, float c2, int dimensions, np.ndarray bounds, object topology, int seed, int niter_success, float max_velocity):
+    def validate_inputs(self, object objective_function, int swarm_size, int max_iterations, object w, float c1, float c2, int dimensions, np.ndarray bounds, object topology, int seed, int niter_success, float max_velocity):
         if not callable(objective_function):
             raise ValueError("Objective function must be callable.")
-        if w < 0:
+        if callable(w) is False and w < 0 :
             raise ValueError("Inertia weight must be greater than 0.")
         if c1 < 0 or c2 < 0:
             raise ValueError("Cognitive and social components must be greater than 0.")
@@ -399,9 +399,11 @@ cdef class State:
         else:
             raise ValueError("Invalid topology. Must be callable or one of 'ring' or 'star'.")
 
+        cdef float current_inertia = self.w(self) if callable(self.w) else self.w
+
         _update_velocity(velocity=self.velocities_view, positions=self.positions_view, pbest_fitnesses=self.pbest_fitnesses_view,
                          pbest_fitness_positions=self.pbest_fitness_positions_view, gbest_position=self.gbest_position,
-                         w=self.w, c1=self.c1, c2=self.c2, swarm_size=self.swarm_size, dimensions=self.dimensions,
+                         w=current_inertia, c1=self.c1, c2=self.c2, swarm_size=self.swarm_size, dimensions=self.dimensions,
                          topology=topology_local, max_velocity=self.max_velocity, pso=self)
 
     cdef void initialise_positions(self):
@@ -509,9 +511,13 @@ cdef class State:
             # If no particle has a better fitness than the global best, increment the counter
             self.niter_at_gbest += 1
 
+    cpdef int get_current_iteration(self):
+        return self.current_iteration
             
     cpdef int get_swarm_size(self):
         return self.swarm_size
+    cpdef int get_max_iter(self):
+        return self.max_iter
 
 cdef class TestState(State):
     """
@@ -572,9 +578,9 @@ cdef class TestState(State):
                          w=self.w, c1=self.c1, c2=self.c2, swarm_size=self.swarm_size, dimensions=self.dimensions,
                          topology=self.topology, max_velocity=self.max_velocity, pso=self)
 
-cpdef particleswarm(object objective_function, int swarm_size,int dimensions, int max_iter=1000, float w=0.729, float c1=1.4, float c2=1.4,
+cpdef particleswarm(object objective_function, int swarm_size,int dimensions, int max_iter=1000, object w=0.729, float c1=1.4, float c2=1.4,
                     np.ndarray bounds=None, object topology = 'star', int seed = -1, int niter_success = -1,
-                    max_velocity = -1):
+                    int max_velocity = -1, object dynamic_inertia = None):
     pso = State(objective_function, swarm_size,dimensions, max_iter, 
                 w, c1, c2, bounds, topology, seed, niter_success,
                 max_velocity)
