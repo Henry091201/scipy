@@ -252,128 +252,179 @@ cdef class State:
 
     cdef float max_velocity
 
-    def __cinit__(self, object objective_function, int swarm_size, int dimensions, int max_iter, object w, float c1, float c2, np.ndarray bounds,
-                 object topology, int seed, int niter_success, float max_velocity):
+    def __cinit__(self, object objective_function, int swarm_size, int dimensions, 
+                int max_iter, object w, float c1, float c2, np.ndarray bounds,
+                object topology, int seed, int niter_success, float max_velocity):
+        # Validate the inputs to ensure they meet the expected criteria
+        self.validate_inputs(
+            objective_function=objective_function, swarm_size=swarm_size, 
+            max_iterations=max_iter, w=w, c1=c1, c2=c2, dimensions=dimensions, 
+            bounds=bounds, topology=topology, seed=seed, niter_success=niter_success, 
+            max_velocity=max_velocity
+        )
 
-        self.validate_inputs(objective_function=objective_function, swarm_size=swarm_size, max_iterations=max_iter, w=w, c1=c1,
-                             c2=c2, dimensions=dimensions, bounds=bounds, topology=topology, seed=seed, niter_success=niter_success, 
-                             max_velocity=max_velocity)
+        # Create particle positions, velocities, and best known positions arrays
+        self.velocities = np.zeros((swarm_size, dimensions), dtype=np.float32)
+        self.positions = np.zeros((swarm_size, dimensions), dtype=np.float32)
+        self.pbest_fitness_positions = np.zeros((swarm_size, dimensions), dtype=np.float32)
+        self.pbest_fitnesses = np.zeros(swarm_size, dtype=np.float32)
 
-        self.velocities = np.zeros((swarm_size, dimensions), dtype='f')
-        self.positions = np.zeros((swarm_size, dimensions), dtype='f')
+        # Create initial global best position and fitness arrays
+        self.gbest_position = np.zeros(dimensions, dtype=np.float32)
+        self.gbest_fitness = np.inf
 
+        # Additional state variables initialization
         self.bounds = bounds
+        self.max_iter = max_iter
+        self.swarm_size = swarm_size
+        self.dimensions = dimensions
+        self.w = w
+        self.c1 = c1
+        self.c2 = c2
+        self.objective_function = objective_function
+        self.topology = topology
+        self.current_iteration = 0
+        self.niter_success = niter_success
+        self.niter_at_gbest = 0
+        self.max_velocity = max_velocity
 
-        self.pbest_fitnesses = np.zeros(swarm_size, dtype='f')
-        self.pbest_fitness_positions = np.zeros((swarm_size, dimensions), dtype='f')
-
+        # Initialize memory views for direct array manipulation
         self.velocities_view = self.velocities
         self.positions_view = self.positions
         self.pbest_fitnesses_view = self.pbest_fitnesses
         self.pbest_fitness_positions_view = self.pbest_fitness_positions
 
-        self.max_iter = max_iter
-        self.gbest_position = np.zeros(dimensions, dtype='f')
-        self.gbest_fitness = np.inf 
-
-        self.swarm_size = swarm_size
-        self.w = w
-        self.c1 = c1
-        self.c2 = c2
-        self.dimensions = dimensions
-        self.objective_function = objective_function
-        self.topology = topology
-    
-        self.current_iteration = 0
-        self.niter_success = niter_success
-        self.niter_at_gbest = 0
-
-        self.max_velocity = max_velocity
-
-        self.seed = seed
+        # Seed the random number generator if a seed is provided
         if seed != -1:
             np.random.seed(seed)
 
-
     cdef void setup(self):
-        self.initialise_positions()
-        # Initialise fitnesses
-        self.initialise_fitnesses()
-        # Update the global best
-        self.update_gbest()
-        # initialise velocities
-        self.initialise_velocities()
-        ##print(f"Initialised everything")
-        #print(self.print_class_variables())
+        """
+        Setup the initial state for the particle swarm optimization by initializing positions,
+        fitnesses, velocities, and updating the global best.
+        """
+        self.initialise_positions()  # Initialize particle positions
+        self.initialise_fitnesses()  # Initialize fitness values for each particle
+        self.update_gbest()          # Update global best from initial particles
+        self.initialise_velocities() # Initialize particle velocities
 
     cpdef np.ndarray star(self, State pso, int particle_index):
-        # Produces the ring topology for the particles
+        """
+        Define a star topology for the swarm where every particle is connected to every other particle.
 
+        Parameters:
+        pso (State): The current state of the PSO simulation.
+        particle_index (int): Index of the current particle (not used in this topology).
+
+        Returns:
+        np.ndarray: An array of indices representing all particles in the swarm.
+        """
         return np.arange(self.swarm_size, dtype=np.int32)
 
     cpdef np.ndarray ring(self, State pso, int particle_index):
-        # Produces the ring topology for the particles
+        """
+        Define a ring topology for the swarm where each particle is connected to its two immediate neighbors.
+
+        Parameters:
+        pso (State): The current state of the PSO simulation.
+        particle_index (int): Index of the current particle.
+
+        Returns:
+        np.ndarray: An array of indices representing the neighbors of the current particle.
+        """
         cdef np.ndarray neighbours = np.empty(2, dtype=np.int32)
-        neighbours[0] = particle_index - 1
-        neighbours[1] = particle_index + 1
-        if particle_index == 0:
-            neighbours[0] = self.swarm_size - 1
-        if particle_index == self.swarm_size - 1:
-            neighbours[1] = 0
+        neighbours[0] = (particle_index - 1) % self.swarm_size  # Wrap-around left neighbor
+        neighbours[1] = (particle_index + 1) % self.swarm_size  # Wrap-around right neighbor
         return neighbours
 
+
     def __next__(self):
+        """
+        Perform a single iteration of the particle swarm optimization process.
+
+        Raises:
+        StopIteration: When the maximum number of iterations is reached, or no improvement
+                    is found in global best for a predefined number of iterations.
+        """
+        # Check if the maximum number of iterations has been reached
         if self.current_iteration >= self.max_iter:
             self.message = "Maximum number of iterations reached"
             raise StopIteration
 
+        # Check if the number of iterations without improvement in global best exceeds limit
         if self.niter_success > 0 and self.niter_at_gbest >= self.niter_success:
             self.message = "Maximum number of iterations at global best reached"
             raise StopIteration
-        # Do a single interation
-        # Update the positions
-        _update_position(self.positions, self.velocities, self.swarm_size)
-        # self.update_all_positions()
-        # Update the fitnesses
-        self.calculate_all_fitnesses()
-        # Update the global best
-        self.update_gbest()
-        # Update the velocities
 
-        #self.update_all_velocities()
+        # Update particle positions based on current velocities
+        _update_position(self.positions, self.velocities, self.swarm_size)
+
+        # Calculate fitness for all particles
+        self.calculate_all_fitnesses()
+
+        # Update global best from the new fitness values
+        self.update_gbest()
+
+        # Update velocities based on new particle positions and personal bests
         self.update_velocity()
 
+        # Increment the current iteration count
         self.current_iteration += 1
+
 
     def __iter__(self):
         return self
 
     cdef solve(self):
+        """
+        Execute the particle swarm optimization process until the stopping condition is met.
+
+        Returns:
+        object: An instance of OptimizeResult containing the optimization results.
+        """
         cdef int i
         for i in range(self.max_iter + 1):
             try:
                 next(self)
             except StopIteration:
                 break
-        
+
         return self.package_result(self.message)
 
     def package_result(self, message):
+        """
+        Package the results of the optimization into a structured format.
+
+        Parameters:
+        message (str): A message describing the outcome of the optimization.
+
+        Returns:
+        object: An OptimizeResult containing the optimization outcomes.
+        """
         cdef object result = OptimizeResult(
-        x = self.gbest_position,
-        fun = self.gbest_fitness,
-        population = self.positions,
-        nit = self.current_iteration,
-        nfev = self.current_iteration * self.swarm_size,
-        success = True,
-        message = message
+            x=self.gbest_position,
+            fun=self.gbest_fitness,
+            population=self.positions,
+            nit=self.current_iteration,
+            nfev=self.current_iteration * self.swarm_size,
+            success=True,
+            message=message
         )
         return result
 
-    def validate_inputs(self, object objective_function, int swarm_size, int max_iterations, object w, float c1, float c2, int dimensions, np.ndarray bounds, object topology, int seed, int niter_success, float max_velocity):
+
+    def validate_inputs(self, object objective_function, int swarm_size, int max_iterations, 
+                        object w, float c1, float c2, int dimensions, np.ndarray bounds, 
+                        object topology, int seed, int niter_success, float max_velocity):
+        """
+        Validate the input parameters for the particle swarm optimization configuration.
+
+        Raises:
+        ValueError: If any of the parameters do not meet the required criteria.
+        """
         if not callable(objective_function):
             raise ValueError("Objective function must be callable.")
-        if callable(w) is False and w < 0 :
+        if not callable(w) and w < 0:
             raise ValueError("Inertia weight must be greater than 0.")
         if c1 < 0 or c2 < 0:
             raise ValueError("Cognitive and social components must be greater than 0.")
@@ -387,113 +438,121 @@ cdef class State:
             raise ValueError("Number of iterations at global best must be greater than 1.")
         if max_velocity <= 0 and max_velocity != -1.0:
             raise ValueError("Maximum velocity must be greater than 0.")
-        
+
     cdef void update_velocity(self):
-        cdef object topology_local
+        """
+        Update the velocities of all particles in the swarm according to the chosen topology.
+        """
+        # Determine the appropriate topology function
+        cdef object topology_local = self.resolve_topology()
+
+        # Get current inertia from the inertia weight function or static value
+        cdef float current_inertia = self.w(self) if callable(self.w) else self.w
+
+        # Delegate to a low-level Cython function to update velocities
+        _update_velocity(
+            velocity=self.velocities_view, 
+            positions=self.positions_view, 
+            pbest_fitnesses=self.pbest_fitnesses_view,
+            pbest_fitness_positions=self.pbest_fitness_positions_view, 
+            gbest_position=self.gbest_position,
+            w=current_inertia, c1=self.c1, c2=self.c2, swarm_size=self.swarm_size, 
+            dimensions=self.dimensions,
+            topology=topology_local, max_velocity=self.max_velocity, pso=self
+        )
+
+    def resolve_topology(self):
+        """
+        Resolve the topology to use for updating particle velocities based on the configuration.
+
+        Returns:
+        object: The topology function to be used.
+        Raises:
+        ValueError: If the topology is not recognized or callable.
+        """
         if callable(self.topology):
-            topology_local = self.topology
+            return self.topology
         elif self.topology == 'ring':
-            topology_local = self.ring
+            return self.ring
         elif self.topology == 'star':
-            topology_local = self.star
+            return self.star
         else:
             raise ValueError("Invalid topology. Must be callable or one of 'ring' or 'star'.")
 
-        cdef float current_inertia = self.w(self) if callable(self.w) else self.w
-
-        _update_velocity(velocity=self.velocities_view, positions=self.positions_view, pbest_fitnesses=self.pbest_fitnesses_view,
-                         pbest_fitness_positions=self.pbest_fitness_positions_view, gbest_position=self.gbest_position,
-                         w=current_inertia, c1=self.c1, c2=self.c2, swarm_size=self.swarm_size, dimensions=self.dimensions,
-                         topology=topology_local, max_velocity=self.max_velocity, pso=self)
 
     cdef void initialise_positions(self):
-        cdef int i
-        cdef int j
+        """
+        Initialize particle positions within specified bounds for each dimension.
+        If no bounds are specified, it defaults to (-5, 5) for each dimension.
+        """
+        cdef int i, j
         cdef np.ndarray local_bounds
 
+        # Determine the bounds for initialization
         if self.bounds is None:
-            # If the bounds are not set, default to (-5, 5) for each dimension.
-            # This will allow place the particles within the bounds, but allow for exploration
-            # anywhere within the search space
-            local_bounds = np.array([(-5, 5)] * self.dimensions, dtype='f')
+            # Default bounds if none are specified
+            local_bounds = np.array([(-5, 5)] * self.dimensions, dtype=np.float32)
         else:
             local_bounds = self.bounds
 
+        # Initialize each particle's position
         for i in range(self.swarm_size):
             for j in range(self.dimensions):
-                # Choose a random position within the bounds for that dimension
+                # Generate a random position within the bounds for each dimension
                 random_position = np.random.uniform(local_bounds[j][0], local_bounds[j][1])
-                # Set the position
                 self.positions[i, j] = random_position
 
+
     cpdef void initialise_velocities(self):
-        cdef int i
-        cdef int j
+        """
+        Initialize the velocities of each particle within specified velocity bounds.
+        If bounds are provided, velocities are set to a maximum of 30% of each dimension's range.
+        If no bounds are given, velocities default to between -1 and 1.
+        """
+        cdef int i, j
         cdef float min_velocity_bound, max_velocity_bound
 
+        # Iterate through each particle and dimension to initialize velocities
         for i in range(self.swarm_size):
             for j in range(self.dimensions):
-                # Set the velocity bounds to max 30% of the search space
                 if self.bounds is not None:
-                    min_velocity_bound = 0.3 * (self.bounds[j][0])
-                    max_velocity_bound = 0.3 * (self.bounds[j][1])
-                
+                    # Calculate velocity bounds as 30% of the positional bounds
+                    min_velocity_bound = 0.3 * self.bounds[j][0]
+                    max_velocity_bound = 0.3 * self.bounds[j][1]
+                    # Generate a random velocity within the calculated bounds
                     random_velocity = np.random.uniform(min_velocity_bound, max_velocity_bound)
                 else:
+                    # Default velocity bounds when no positional bounds are provided
                     random_velocity = np.random.uniform(-1, 1)
-                # Set the velocity
+
+                # Set the particle's velocity
                 self.velocities[i, j] = random_velocity
 
-    cdef float calculate_fitness(self, int particle_index):
-        cdef np.ndarray position = self.positions[particle_index]
-        assert len(position) == self.dimensions, "Argument 'position' must have the same length as the number of dimensions."
-        cdef float fitness = self.objective_function(*position)
-        return fitness
-
-    cdef float calculate_fitness_and_update(self, int particle_index):
-        cdef float fitness = self.calculate_fitness(particle_index)
-        # Update the pbest fitness if the new fitness is better
-        if fitness < self.pbest_fitnesses[particle_index]:
-            self.pbest_fitnesses[particle_index] = fitness
-            self.pbest_fitness_positions[particle_index] = self.positions[particle_index].copy()
-            # If the new position is out of bounds, set the particles fitness to infinity
-            # This will cause the particle to be ignored in the next iteration but still be in the swarm
-            # with the potential to be reactivated
-            if np.any(self.positions[particle_index] < self.bounds[:, 0]) or np.any(self.positions[particle_index] > self.bounds[:, 1]):
-                self.pbest_fitnesses[particle_index] = np.inf
-        return fitness
 
     cdef void calculate_all_fitnesses(self):
+        """
+        Calculate and update the fitness for all particles in the swarm.
+        This method iterates through all particles, computing their fitness based on the 
+        current positions and updates personal bests if the new fitness is better.
+        """
         cdef int i
+        # Iterate through each particle to calculate and update its fitness
         for i in range(self.swarm_size):
-            _calculate_and_update_fitness(positions=self.positions_view, pbest_fitness_positions=self.pbest_fitness_positions_view,
-                                          pbest_fitnesses=self.pbest_fitnesses_view, particle_index=i, objective_function=self.objective_function,
-                                          dimensions=self.dimensions, bounds=self.bounds)
+            _calculate_and_update_fitness(
+                positions=self.positions_view,
+                pbest_fitness_positions=self.pbest_fitness_positions_view,
+                pbest_fitnesses=self.pbest_fitnesses_view,
+                particle_index=i,
+                objective_function=self.objective_function,
+                dimensions=self.dimensions,
+                bounds=self.bounds
+            )
 
     cdef void initialise_fitnesses(self):
         cdef int i
         for i in range(self.swarm_size):
             self.pbest_fitnesses[i] = _calculate_fitness(self.positions, i, self.objective_function, self.dimensions, self.bounds)
             self.pbest_fitness_positions[i] = self.positions[i].copy()
-
-    cdef float cap_velocity(self, float vel, float max_velocity):
-        if vel > max_velocity:
-            return max_velocity
-        else:
-            return vel
-
-    cdef void update_position(self, int particle_index):
-        cdef int i
-        cdef np.ndarray position = self.positions[particle_index]
-        cdef np.ndarray velocity = self.velocities[particle_index]
-        for i in range(self.dimensions):
-            position[i] = position[i] + velocity[i]
-            # The bounds are dealt with in the fitness function, so we don't need to worry about them here
-
-    cdef void update_all_positions(self):
-        cdef int i
-        for i in range(self.swarm_size):
-            self.update_position(i)
 
     cdef void update_gbest(self):
         cdef bint updated = False
@@ -578,12 +637,25 @@ cdef class TestState(State):
                          w=self.w, c1=self.c1, c2=self.c2, swarm_size=self.swarm_size, dimensions=self.dimensions,
                          topology=self.topology, max_velocity=self.max_velocity, pso=self)
 
-cpdef particleswarm(object objective_function, int swarm_size,int dimensions, int max_iter=1000, object w=0.729, float c1=1.4, float c2=1.4,
-                    np.ndarray bounds=None, object topology = 'star', int seed = -1, int niter_success = -1,
-                    int max_velocity = -1, object dynamic_inertia = None):
-    pso = State(objective_function, swarm_size,dimensions, max_iter, 
-                w, c1, c2, bounds, topology, seed, niter_success,
-                max_velocity)
+cpdef particleswarm(
+    object objective_function,
+    int swarm_size,
+    int dimensions,
+    int max_iter=1000,
+    object w=0.729,
+    float c1=1.4,
+    float c2=1.4,
+    np.ndarray bounds=None,
+    object topology='star',
+    int seed=-1,
+    int niter_success=-1,
+    int max_velocity=-1,
+):
+    pso = State(
+        objective_function, swarm_size, dimensions, max_iter,
+        w, c1, c2, bounds, topology, seed, niter_success,
+        max_velocity
+    )
     pso.setup()
     return pso.solve()
 
