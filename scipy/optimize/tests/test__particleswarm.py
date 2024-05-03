@@ -47,7 +47,7 @@ def test_dynamic_inertia():
 def test_velocity_initialisation():
     # Test the initialisation of the velocities
 
-    bounds = np.array([[-10, 10], [-10, 10]])
+    bounds = ((-10, 10), (-10, 10))
     state_class = TestState(rast, 50, 2, max_iter=1000, w=0.729, c1=1.4, c2=1.4,
                     bounds=bounds, topology = 'star', seed = -1, niter_success = -1,
                     max_velocity = -1)
@@ -93,7 +93,7 @@ class TestParticleSwarm:
         """
         If the particle goes out of bounds, its fitness should be set to infinity
         """
-        bounds = np.array([[-10, 10], [-10, 10]])
+        bounds = ((-10, 10), (-10, 10))
         state_class = TestState(rast, 50, 2, max_iter=1000, w=0.729, c1=1.4, c2=1.4,
                     bounds=bounds, topology = 'star', seed = -1, niter_success = -1,
                     max_velocity = -1)
@@ -113,7 +113,8 @@ class TestParticleSwarm:
         """
         Test the velocity clamping
         """
-        bounds = np.array([[-10, 10], [-10, 10]])
+        bounds = ((-10, 10), (-10, 10))
+        
         state_class = TestState(rast, 50, 2, max_iter=1000, w=1, c1=1.4, c2=1.4,
                     bounds=bounds, topology = 'star', seed = -1, niter_success = -1,
                     max_velocity = 3)

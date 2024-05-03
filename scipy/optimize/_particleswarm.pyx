@@ -2,7 +2,6 @@ cimport numpy as np
 from libcpp cimport bool
 from libc.math cimport exp, sqrt, cos, pi
 from libc.stdlib cimport malloc, free
-
 from cython.parallel import prange
 import sys
 import numpy as np
@@ -170,7 +169,7 @@ cdef class State:
     cdef float max_velocity
 
     def __cinit__(self, object objective_function, int swarm_size, int dimensions, 
-                int max_iter, object w, float c1, float c2, np.ndarray bounds,
+                int max_iter, object w, float c1, float c2, tuple bounds,
                 object topology, int seed, int niter_success, float max_velocity):
         # Validate the inputs to ensure they meet the expected criteria
         self.validate_inputs(
@@ -191,7 +190,7 @@ cdef class State:
         self.gbest_fitness = np.inf
 
         # Additional state variables initialization
-        self.bounds = bounds
+        self.bounds = np.array(bounds, dtype=np.float32) if bounds is not None else None
         self.max_iter = max_iter
         self.swarm_size = swarm_size
         self.dimensions = dimensions
@@ -353,7 +352,7 @@ cdef class State:
 
 
     def validate_inputs(self, object objective_function, int swarm_size, int max_iterations, 
-                        object w, float c1, float c2, int dimensions, np.ndarray bounds, 
+                        object w, float c1, float c2, int dimensions, tuple bounds, 
                         object topology, int seed, int niter_success, float max_velocity):
         """
         Validate the input parameters for the particle swarm optimization configuration.
@@ -455,8 +454,8 @@ cdef class State:
         for i in range(self.swarm_size):
             for j in range(self.dimensions):
                 if self.bounds is not None:
-                    # Calculate velocity bounds as 30% of the positional bounds
-                    min_velocity_bound = 0.3 * self.bounds[j][0]
+                    # Calculate velocity bounds as 30% of the difference between positional bounds
+                    min_velocity_bound = -0.3 * self.bounds[j][1]
                     max_velocity_bound = 0.3 * self.bounds[j][1]
                     # Generate a random velocity within the calculated bounds
                     random_velocity = np.random.uniform(min_velocity_bound, max_velocity_bound)
@@ -584,7 +583,7 @@ cpdef particleswarm(
     object w=0.729,
     float c1=1.4,
     float c2=1.4,
-    np.ndarray bounds=None,
+    tuple bounds=None,
     object topology='star',
     int seed=-1,
     int niter_success=-1,
@@ -599,7 +598,7 @@ cpdef particleswarm(
     return pso.solve()
 
 def _initialise_state(object objective_function, int swarm_size,int dimensions, int max_iter=1000, float w=0.729, float c1=1.4, float c2=1.4,
-                    np.ndarray bounds=None, object topology = 'star', int seed = -1, int niter_success = -1,
+                    tuple bounds=None, object topology = 'star', int seed = -1, int niter_success = -1,
                     max_velocity = -1):
     """
     This returns a State object, this is used for testing.
