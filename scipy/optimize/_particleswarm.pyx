@@ -27,15 +27,12 @@ cdef tuple _update_gbest(float [:] pbest_fitnesses, float[:,:] positions, float 
 
     return updated, gbest, gbest_position
 
-cdef void _update_position(position, velocity, int swarm_size):
+cdef void _update_position(float[:,:] position, float[:,:] velocity, int swarm_size):
     cdef int i, j
 
-    position += velocity
-    """
     for i in range(swarm_size):
         for j in range(position.shape[1]):
             position[i, j] += velocity[i, j]
-            """
 
 cdef float _calculate_fitness(float [:, :] positions, int particle_index, object objective_function, int dimensions, np.ndarray bounds):
     cdef float fitness = 0.0
@@ -299,7 +296,7 @@ cdef class State:
             raise StopIteration
 
         # Update particle positions based on current velocities
-        _update_position(self.positions, self.velocities, self.swarm_size)
+        _update_position(self.positions_view, self.velocities_view, self.swarm_size)
 
         # Calculate fitness for all particles
         self.calculate_all_fitnesses()
