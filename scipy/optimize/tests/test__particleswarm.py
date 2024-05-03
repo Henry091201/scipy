@@ -6,7 +6,7 @@ import pytest
 import numpy as np
 from scipy.optimize import rosen
 
-from scipy.optimize import particleswarm, OptimizeResult, _initialise_state, TestState, gbest
+from scipy.optimize import particleswarm, OptimizeResult, TestState 
 # Set the seed for reproducibility
 
 def rast(x):
@@ -32,7 +32,7 @@ def test_particle_swarm_invalid_params():
 def test_array_dimensions():
     # Test the particle swarm optimisation with different array dimensions
     state_class = TestState(rast, 50, 2, max_iter=1000, w=0.729, c1=1.4, c2=1.4,
-                    bounds=None, topology = gbest, seed = -1, niter_success = -1,
+                    bounds=None, topology = 'star', seed = -1, niter_success = -1,
                     max_velocity = -1)
     assert state_class.get_velocities().shape == (50, 2)
     assert state_class.get_positions().shape == (50, 2)
@@ -49,7 +49,7 @@ def test_velocity_initialisation():
 
     bounds = np.array([[-10, 10], [-10, 10]])
     state_class = TestState(rast, 50, 2, max_iter=1000, w=0.729, c1=1.4, c2=1.4,
-                    bounds=bounds, topology = gbest, seed = -1, niter_success = -1,
+                    bounds=bounds, topology = 'star', seed = -1, niter_success = -1,
                     max_velocity = -1)
     
     state_class.setup_test()
@@ -95,7 +95,7 @@ class TestParticleSwarm:
         """
         bounds = np.array([[-10, 10], [-10, 10]])
         state_class = TestState(rast, 50, 2, max_iter=1000, w=0.729, c1=1.4, c2=1.4,
-                    bounds=bounds, topology = gbest, seed = -1, niter_success = -1,
+                    bounds=bounds, topology = 'star', seed = -1, niter_success = -1,
                     max_velocity = -1)
         state_class.setup_test()
         # Assert all particles are within bounds
@@ -115,7 +115,7 @@ class TestParticleSwarm:
         """
         bounds = np.array([[-10, 10], [-10, 10]])
         state_class = TestState(rast, 50, 2, max_iter=1000, w=1, c1=1.4, c2=1.4,
-                    bounds=bounds, topology = gbest, seed = -1, niter_success = -1,
+                    bounds=bounds, topology = 'star', seed = -1, niter_success = -1,
                     max_velocity = 3)
         state_class.setup_test()
         # Assert all velocities are within bounds

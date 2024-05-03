@@ -14,91 +14,6 @@ from scipy.optimize import OptimizeResult
 
 __all__ = ['particleswarm']
 
-cpdef float rastrigin(int x, int y):
-    # Rastrigin function for demonstration purposes
-    cdef float rast = 20 + x ** 2 + y ** 2 - 10 * (cos(2 * pi * x) + cos(2 * pi * y))
-    return rast
-
-def rosen(x):
-    """The Rosenbrock function"""
-    return np.sum(100.0 * (x[1:] - x[:-1] ** 2.0) ** 2.0 + (1 - x[:-1]) ** 2.0)
-
-def sphere(x):
-    """The Sphere function"""
-    return np.sum(x ** 2.0)
-
-def greiwank(x):
-    """The Greiwank function"""
-    d = x.shape[0]
-    j = 1 + (1 / 4000) * np.sum(x ** 2.0) - np.prod(np.cos(x / np.sqrt(np.arange(1, d + 1))))
-    return j
-
-
-def rast(x):
-    # Rastrigin function for demonstration purposes
-    rast = 20 + x[0] ** 2 + x[1] ** 2 - 10 * (cos(2 * pi * x[0]) + cos(2 * pi * x[1]))
-    return rast
-
-cpdef float ackley_function_2d(x, y):
-    """
-    Ackley function for 2-dimensional input.
-
-    Parameters:
-    x (float): X-coordinate.
-    y (float): Y-coordinate.
-
-    Returns:
-    float: The value of the Ackley function for the given input coordinates.
-    """
-    a = 20
-    b = 0.2
-    c = 2 * pi
-
-    term1 = -a * exp(-b * sqrt(0.5 * (x**2 + y**2)))
-    term2 = -exp(0.5 * (cos(c * x) + cos(c * y)))
-
-    value = term1 + term2 + a + exp(1)
-
-    return value
-
-cpdef hartman_6(x1, x2, x3, x4, x5, x6):
-    x = np.array([x1, x2, x3, x4, x5, x6])
-    alpha = np.array([1.0, 1.2, 3.0, 3.2])
-    A = np.array([[10, 3, 17, 3.5, 1.7, 8],
-                  [0.05, 10, 17, 0.1, 8, 14],
-                  [3, 3.5, 1.7, 10, 17, 8],
-                  [17, 8, 0.05, 10, 0.1, 14]])
-    P = 10**(-4) * np.array([[1312, 1696, 5569, 124, 8283, 5886],
-                             [2329, 4135, 8307, 3736, 1004, 9991],
-                             [2348, 1451, 3522, 2883, 3047, 6650],
-                             [4047, 8828, 8732, 5743, 1091, 381]])
-
-    outer_sum = 0
-    for i in range(4):
-        inner_sum = 0
-        for j in range(6):
-            inner_sum += A[i, j] * ((x[j] - P[i, j])**2)
-        outer_sum += alpha[i] * np.exp(-inner_sum)
-
-    return -outer_sum 
-
-"""
-cpdef gbest(State pso, int particleIndex):
-    cdef int swarmSize = pso.get_swarm_size()
-    cdef int[:] arr = np.empty(swarmSize, dtype=np.int32)
-    for i in range(swarmSize):
-        arr[i] = i
-    return arr
-"""
-cpdef np.ndarray gbest(State pso, int particle_index):
-    cdef int i
-    cdef int swarm_size = pso.get_swarm_size()
-    cdef np.ndarray[np.int32_t, ndim=1] arr = np.empty(swarm_size, dtype=np.int32)
-    for i in range(swarm_size):
-        arr[i] = i
-    return arr
-
-
 cdef tuple _update_gbest(float [:] pbest_fitnesses, float[:,:] positions, float gbest_fitness, int swarm_size):
     cdef float gbest = gbest_fitness
     cdef float[:] gbest_position = None
@@ -171,36 +86,41 @@ cdef float _cap_velocity(float vel, float max_velocity):
     else:
         return vel
 
-cdef void _update_velocity(float[:, :] velocity, float [:, :] positions, float [:, :] pbest_fitness_positions, float [:] pbest_fitnesses,
-                           float [:] gbest_position, float w, float c1, float c2, int dimensions, int swarm_size, object topology,
+cdef void _update_velocity(float[:, :] velocity, float[:, :] positions,
+                           float[:, :] pbest_fitness_positions, float[:] pbest_fitnesses,
+                           float[:] gbest_position, float w, float c1, float c2,
+                           int dimensions, int swarm_size, object topology,
                            float max_velocity, State pso):
+    """
+    Update the velocity for each particle in the swarm based on cognitive and social components.
+    """
     cdef int particle_index, best_neighbor, j
     cdef float cognitive_component, social_component, velocity_calculation
-    cdef np.ndarray neighbours
-    cdef np.ndarray best_neighbours = np.empty(swarm_size, dtype=np.int32)
+    cdef np.ndarray neighbours, best_neighbours = np.empty(swarm_size, dtype=np.int32)
     cdef int[:] best_neighbours_view = best_neighbours
     cdef np.ndarray r1 = np.random.uniform(0, 1, (swarm_size, dimensions))
     cdef np.ndarray r2 = np.random.uniform(0, 1, (swarm_size, dimensions))
-    cdef double[:,:] r1_view = r1
-    cdef double[:,:] r2_view = r2
+    cdef double[:, :] r1_view = r1
+    cdef double[:, :] r2_view = r2
 
-
-    # Update the velocity in parallel
+    # Update velocities for each particle
     for particle_index in range(swarm_size):
         neighbours = get_neighbours(pso, particle_index, topology)
         best_neighbours_view[particle_index] = _find_best_neighbour(pbest_fitnesses, neighbours)
         best_neighbor = best_neighbours_view[particle_index]
 
         for j in range(dimensions):
-            cognitive_component = c1 * r1_view[particle_index][j] * (pbest_fitness_positions[particle_index][j] - positions[particle_index][j])
-            social_component = c2 * r2_view[particle_index][j] * (pbest_fitness_positions[best_neighbor][j] - positions[particle_index][j])
-            velocity_calculation = w * velocity[particle_index][j] + cognitive_component + social_component
+            cognitive_component = c1 * r1_view[particle_index, j] * (pbest_fitness_positions[particle_index, j] - positions[particle_index, j])
+            social_component = c2 * r2_view[particle_index, j] * (pbest_fitness_positions[best_neighbor, j] - positions[particle_index, j])
+            velocity_calculation = w * velocity[particle_index, j] + cognitive_component + social_component
 
-            # If the max velocity is set, cap the velocity
+            # Cap the velocity if it exceeds the maximum allowed velocity
             if max_velocity > 0:
                 velocity_calculation = _cap_velocity(velocity_calculation, max_velocity)
 
-            velocity[particle_index][j] = velocity_calculation
+            velocity[particle_index, j] = velocity_calculation
+
+
 
 cdef get_neighbours(State pso, int particle_index, object topology):
     cdef np.ndarray neighbours = topology(pso, particle_index).astype(np.int32)
@@ -300,13 +220,35 @@ cdef class State:
 
     cdef void setup(self):
         """
-        Setup the initial state for the particle swarm optimization by initializing positions,
+        Setup the initial state for the particle swarm optimization by initialising positions,
         fitnesses, velocities, and updating the global best.
         """
-        self.initialise_positions()  # Initialize particle positions
-        self.initialise_fitnesses()  # Initialize fitness values for each particle
+        self.initialise_positions()  # Initialise particle positions
+        self.initialise_fitnesses()  # Initialise fitness values for each particle
         self.update_gbest()          # Update global best from initial particles
-        self.initialise_velocities() # Initialize particle velocities
+        self.initialise_velocities() # Initialise particle velocities
+
+    def get_attributes(self):
+        return {
+            'velocities': self.velocities,
+            'positions': self.positions,
+            'pbest_fitnesses': self.pbest_fitnesses,
+            'pbest_fitness_positions': self.pbest_fitness_positions,
+            'gbest_position': self.gbest_position,
+            'gbest_fitness': self.gbest_fitness,
+            'max_iter': self.max_iter,
+            'swarm_size': self.swarm_size,
+            'w': self.w,
+            'c1': self.c1,
+            'c2': self.c2,
+            'dimensions': self.dimensions,
+            'objective_function': self.objective_function,
+            'topology': self.topology,
+            'current_iteration': self.current_iteration,
+            'seed': self.seed,
+            'niter_success': self.niter_success,
+            'niter_at_gbest': self.niter_at_gbest,
+            'max_velocity': self.max_velocity}
 
     cpdef np.ndarray star(self, State pso, int particle_index):
         """
@@ -340,7 +282,7 @@ cdef class State:
 
     def __next__(self):
         """
-        Perform a single iteration of the particle swarm optimization process.
+        Perform a single iteration of the particle swarm optimisation process.
 
         Raises:
         StopIteration: When the maximum number of iterations is reached, or no improvement
@@ -578,6 +520,9 @@ cdef class State:
     cpdef int get_max_iter(self):
         return self.max_iter
 
+    def get_velocities(self):
+        return self.velocities
+
 cdef class TestState(State):
     """
     This is a class that allows easy the Python unit tests to interface with the Cython attributes
@@ -632,10 +577,7 @@ cdef class TestState(State):
         self.velocities[particle_index] = velocity
 
     def update_all_velocities(self):
-        _update_velocity(velocity=self.velocities_view, positions=self.positions_view, pbest_fitnesses=self.pbest_fitnesses_view,
-                         pbest_fitness_positions=self.pbest_fitness_positions_view, gbest_position=self.gbest_position,
-                         w=self.w, c1=self.c1, c2=self.c2, swarm_size=self.swarm_size, dimensions=self.dimensions,
-                         topology=self.topology, max_velocity=self.max_velocity, pso=self)
+        self.update_velocity()
 
 cpdef particleswarm(
     object objective_function,
@@ -660,7 +602,7 @@ cpdef particleswarm(
     return pso.solve()
 
 def _initialise_state(object objective_function, int swarm_size,int dimensions, int max_iter=1000, float w=0.729, float c1=1.4, float c2=1.4,
-                    np.ndarray bounds=None, object topology = gbest, int seed = -1, int niter_success = -1,
+                    np.ndarray bounds=None, object topology = 'star', int seed = -1, int niter_success = -1,
                     max_velocity = -1):
     """
     This returns a State object, this is used for testing.
