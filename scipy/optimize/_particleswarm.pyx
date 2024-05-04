@@ -398,15 +398,60 @@ cpdef particleswarm(
     int swarm_size,
     int dimensions,
     int max_iter=1000,
-    object w=0.729,
+    object w=0.8,
     float c1=1.4,
     float c2=1.4,
     tuple bounds=None,
     object topology='star',
     int seed=-1,
     int niter_success=-1,
-    int max_velocity=-1,
+    int max_velocity=300000,
 ):
+
+    """
+    Perform Particle Swarm Optimization (PSO) for optimization problems.
+
+    Parameters
+    ----------
+    objective_function : callable
+        The objective function to be optimized. It should accept a numpy array of shape (dimensions,) as input
+        and return a float value representing the fitness.
+    swarm_size : int
+        The number of particles in the swarm.
+    dimensions : int
+        The number of dimensions in the search space.
+    max_iter : int, optional
+        Maximum number of iterations (default is 1000).
+    w : float or callable, optional
+        Inertia weight. If a float, it represents the inertia weight. If a callable, it should accept the State class
+        and return a float value representing the inertia weight (default is 0.8).
+    c1 : float, optional
+        Cognitive parameter (default is 1.4).
+    c2 : float, optional
+        Social parameter (default is 1.4).
+    bounds : tuple, optional
+        A tuple of length 2, where each element is a tuple representing the lower
+        and upper bounds of the search space for each dimension (default is None).
+    topology : {'star', 'ring'} or callable optional, If a callable, it should accept the State class, and an integer representing the particle index, 
+        and return an array of integers representing the neighbors of the particle.
+        Topology of the swarm. 'star' for global best PSO, 'ring' for local best PSO (default is 'star').
+    seed : int, optional
+        Seed for random number generation (default is -1).
+    niter_success : int, optional
+        Number of iterations for successful convergence (default is -1).
+    max_velocity : int, optional
+        Maximum velocity for particles (default is -1).
+
+    Returns
+    -------
+    OptimizeResult
+        The optimization result represented as a ``scipy.optimize.OptimizeResult`` object.
+
+    Notes
+    -----
+    This function initializes a PSO optimizer, performs the optimization, and returns the optimized solution.
+
+    """
     pso = State(
         objective_function, swarm_size, dimensions, max_iter,
         w, c1, c2, bounds, topology, seed, niter_success,
