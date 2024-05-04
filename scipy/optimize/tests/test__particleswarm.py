@@ -16,11 +16,14 @@ def quadratic(x):
     return np.sum(x**2)
 
 def mock_topology(pso, particle_index):
-    return np.arange(pso.get_swarm_size())
+    attr = pso.get_attributes()
+    swarm_size = attr['swarm_size']
+    return np.arange(swarm_size)
 
 def mock_dynamic_inertia(pso):
-    iteration = pso.get_current_iteration()
-    max_iter = pso.get_max_iter()
+    attr = pso.get_attributes()
+    iteration = attr['current_iteration'] 
+    max_iter = attr['max_iter']
     return 0.9 - (0.5 / max_iter) * iteration
     
 
@@ -34,10 +37,12 @@ def test_array_dimensions():
     state_class = TestState(rast, 50, 2, max_iter=1000, w=0.729, c1=1.4, c2=1.4,
                     bounds=None, topology = 'star', seed = -1, niter_success = -1,
                     max_velocity = -1)
-    assert state_class.get_velocities().shape == (50, 2)
-    assert state_class.get_positions().shape == (50, 2)
-    assert state_class.get_pbest_fitnesses().shape == (50,)
-    assert state_class.get_pbest_fitness_positions().shape == (50, 2)
+    
+    attr = state_class.get_attributes()
+    assert attr['velocities'].shape == (50, 2)
+    assert attr['positions'].shape == (50, 2)
+    assert attr['pbest_fitnesses'].shape == (50,)
+    assert attr['pbest_fitness_positions'].shape == (50, 2)
     
 def test_dynamic_inertia():
     # Test the dynamic inertia
@@ -54,8 +59,9 @@ def test_velocity_initialisation():
     
     state_class.setup_test()
     # Assert that the velocities are max 30% of search space
-    assert np.all(state_class.get_velocities() >= -3)
-    assert np.all(state_class.get_velocities() <= 3)
+    attr = state_class.get_attributes()
+    assert np.all(attr['velocities'] >= -3)
+    assert np.all(attr['velocities'] <= 3)
 
 class TestParticleSwarm:
     # Test correctness
@@ -98,11 +104,13 @@ class TestParticleSwarm:
                     bounds=bounds, topology = 'star', seed = -1, niter_success = -1,
                     max_velocity = -1)
         state_class.setup_test()
+        
+        attr = state_class.get_attributes()
         # Assert all particles are within bounds
-        assert np.all(state_class.get_positions() >= -10)
-        assert np.all(state_class.get_positions() <= 10)
+        assert np.all(attr['positions'] >= -10)
+        assert np.all(attr['positions'] <= 10)
         # Assert no fitness is set to infinity
-        assert np.all(state_class.get_pbest_fitnesses() != np.inf)
+        assert np.all(attr['pbest_fitnesses'] != np.inf)
 
         # Set a particle out of bounds
         state_class.set_particle_position(0, np.array([100, 100]))
@@ -120,14 +128,17 @@ class TestParticleSwarm:
                     max_velocity = 3)
         state_class.setup_test()
         # Assert all velocities are within bounds
-        assert np.all(state_class.get_velocities() >= -3)
-        assert np.all(state_class.get_velocities() <= 3)
+        attr = state_class.get_attributes()
+        assert np.all(attr['velocities'] >= -3)
+        assert np.all(attr['velocities'] <= 3)
         # Set a particle velocity very high
         state_class.set_particle_velocity(0, np.array([100, 100]))
-        assert not np.all(state_class.get_velocities() <= 3)
+        attr = state_class.get_attributes()
+        assert not np.all(attr['velocities'] <= 3)
         state_class.update_all_velocities()
         # Assert the velocities are clamped
-        assert np.all(state_class.get_velocities() <= 3)
+        attr = state_class.get_attributes()
+        assert np.all(attr['velocities'] <= 3)
 
     def test_topology(self):
         particleswarm(rast, 50, 2, topology="ring")
